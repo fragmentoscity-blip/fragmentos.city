@@ -1,0 +1,6 @@
+{
+  "name": "Fragmentos - Cuadros 3D de Ciudades",
+  "description": "Tienda premium de cuadros de ciudades impresos en 3D con filamentos biodegradables.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
