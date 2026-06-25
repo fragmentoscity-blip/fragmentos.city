@@ -25,7 +25,9 @@ import {
   deleteProductFromSupabase,
   getOrdersFromSupabase,
   createOrderInSupabase,
-  updateOrderStatusInSupabase
+  updateOrderStatusInSupabase,
+  getSiteSettings,
+  saveSiteSettings,
 } from "./lib/supabaseClient";
 
 import { Sliders, RefreshCw, Smartphone, Star, Map, ShieldAlert, CheckCircle, Instagram } from "lucide-react";
@@ -145,10 +147,21 @@ export default function App() {
     return localStorage.getItem("fragmentos_construction_mode") === "true";
   });
 
+  // Leer modo construcción desde Supabase al cargar (para todos los visitantes)
+  useEffect(() => {
+    getSiteSettings().then((data) => {
+      if (data && typeof data.construction_mode === "boolean") {
+        setConstructionMode(data.construction_mode);
+        localStorage.setItem("fragmentos_construction_mode", String(data.construction_mode));
+      }
+    });
+  }, []);
+
   const handleToggleConstructionMode = () => {
     setConstructionMode((prev) => {
       const newVal = !prev;
       localStorage.setItem("fragmentos_construction_mode", String(newVal));
+      saveSiteSettings({ construction_mode: newVal });
       return newVal;
     });
   };
