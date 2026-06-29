@@ -215,6 +215,37 @@ export async function signInWithGoogle() {
   }
 }
 
+export async function authenticateManualUser(login: string, password: string): Promise<{ username: string; email: string; isAdmin: boolean } | null> {
+  try {
+    const cleanLogin = login.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanLogin || !cleanPassword) return null;
+
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .or(`username.eq.${cleanLogin},email.eq.${cleanLogin}`)
+      .maybeSingle();
+
+    if (error || !data) {
+      if (error) console.warn("Manual login failed", error.message);
+      return null;
+    }
+
+    if (data.password !== cleanPassword) return null;
+
+    return {
+      username: data.username,
+      email: data.email || data.username,
+      isAdmin: !!data.is_admin,
+    };
+  } catch (err) {
+    console.error("authenticateManualUser failed", err);
+    return null;
+  }
+}
+
 export async function signOutFromSupabase() {
   const { error } = await supabase.auth.signOut();
   if (error) {

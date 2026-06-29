@@ -333,6 +333,11 @@ export default function App() {
 
   const totalCartCount = cartItems.reduce((acc, it) => acc + it.quantity, 0);
 
+  const handleLogin = (username: string, email: string, isAdmin: boolean) => {
+    setCurrentUser({ username, email, isAdmin });
+    setLoginOpen(false);
+  };
+
   const handleLogout = async () => {
     setProfileOpen(false);
     await signOutFromSupabase();
@@ -587,6 +592,7 @@ export default function App() {
       <LoginModal
         isOpen={loginOpen}
         onClose={() => setLoginOpen(false)}
+        onLogin={handleLogin}
       />
 
       {currentUser && (
