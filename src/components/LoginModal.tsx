@@ -4,8 +4,8 @@
  */
 
 import { FormEvent, useState } from "react";
-import { Chrome, Loader2, Lock, LogIn, User, X } from "lucide-react";
-import { authenticateManualUser, signInWithGoogle } from "../lib/supabaseClient";
+import { Loader2, Lock, LogIn, User, X } from "lucide-react";
+import { authenticateManualUser } from "../lib/supabaseClient";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -23,18 +23,6 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
 
   const isLoading = !!loadingMode;
 
-  const handleGoogleLogin = async () => {
-    setError("");
-    setLoadingMode("google");
-
-    try {
-      await signInWithGoogle();
-    } catch (err: any) {
-      setError(err.message || "No fue posible iniciar sesion con Google.");
-      setLoadingMode("");
-    }
-  };
-
   const handleManualLogin = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
@@ -49,7 +37,7 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
     setLoadingMode("");
 
     if (!user) {
-      setError("Usuario/correo o contrasena incorrectos.");
+      setError("Credenciales de colaborador incorrectas.");
       return;
     }
 
@@ -71,9 +59,9 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="text-2xl font-light tracking-tight mb-1 text-center">Acceder</h2>
+        <h2 className="text-2xl font-light tracking-tight mb-1 text-center">Colaboradores</h2>
         <p className="text-xs text-gray-500 font-mono tracking-wider text-center uppercase mb-6">
-          Google o credenciales de administrador
+          Acceso privado al panel administrativo
         </p>
 
         {error && (
@@ -81,22 +69,6 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
             {error}
           </div>
         )}
-
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={isLoading}
-          className="w-full bg-black hover:bg-neutral-900 text-white p-4 text-[10px] font-mono tracking-[0.2em] uppercase font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-        >
-          {loadingMode === "google" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Chrome className="w-3.5 h-3.5" />}
-          Continuar con Google
-        </button>
-
-        <div className="flex items-center gap-3 my-6">
-          <div className="h-px bg-gray-150 flex-1" />
-          <span className="text-[9px] font-mono uppercase tracking-widest text-gray-400">o</span>
-          <div className="h-px bg-gray-150 flex-1" />
-        </div>
 
         <form onSubmit={handleManualLogin} className="space-y-4">
           <div className="space-y-1.5">
@@ -109,7 +81,7 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
                 type="text"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
-                placeholder="fragmentoscity@gmail.com"
+                placeholder="usuario o correo"
                 disabled={isLoading}
                 className="w-full bg-[#FAFAFA] border border-gray-200 p-3 pl-10 text-sm focus:border-black outline-none transition-colors"
               />
@@ -126,7 +98,7 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="admin123"
+                placeholder="********"
                 disabled={isLoading}
                 className="w-full bg-[#FAFAFA] border border-gray-200 p-3 pl-10 text-sm focus:border-black outline-none transition-colors"
               />

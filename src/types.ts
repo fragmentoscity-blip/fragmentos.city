@@ -83,18 +83,6 @@ export interface SiteSettings {
   };
 }
 
-export interface UserProfile {
-  username: string;
-  email: string;
-  full_name: string;
-  phone: string;
-  document_id: string;
-  department: string;
-  city: string;
-  address: string;
-  updated_at?: string;
-}
-
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   site_active: true,
   construction_mode: false,

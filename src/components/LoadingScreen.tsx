@@ -12,15 +12,16 @@ interface LoadingScreenProps {
 
 const LETTERS = "fragmentos city".split("");
 const TOTAL_DURATION_MS = 3600;
+const UNMOUNT_DELAY_MS = TOTAL_DURATION_MS + 120;
 
 export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
   useEffect(() => {
-    const timer = window.setTimeout(onComplete, TOTAL_DURATION_MS);
+    const timer = window.setTimeout(onComplete, UNMOUNT_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [onComplete]);
 
   return (
-    <div className="fixed inset-0 z-[20000] bg-[#111820] text-white flex items-center justify-center overflow-hidden">
+    <div className="fragmentos-loading-root fixed inset-0 z-[20000] bg-[#111820] text-white flex items-center justify-center overflow-hidden">
       <style>
         {`
           @keyframes fragmentosLetterIn {
@@ -42,6 +43,10 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
           }
 
           .fragmentos-loading-screen {
+            animation: fragmentosScreenFade ${TOTAL_DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1) both;
+          }
+
+          .fragmentos-loading-root {
             animation: fragmentosScreenFade ${TOTAL_DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1) both;
           }
 

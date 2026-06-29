@@ -3,20 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Catalog, { INITIAL_PRODUCTS } from "./components/Catalog";
 import MapConfigurator from "./components/MapConfigurator";
 import Sustainability from "./components/Sustainability";
 import Cart from "./components/Cart";
-import FavoritesDrawer from "./components/FavoritesDrawer";
 import Checkout from "./components/Checkout";
 import OrderSuccess from "./components/OrderSuccess";
 import AdminDashboard from "./components/AdminDashboard";
 import LoginModal from "./components/LoginModal";
-import LoginRequiredModal from "./components/LoginRequiredModal";
-import UserProfileModal from "./components/UserProfileModal";
 import LoadingScreen from "./components/LoadingScreen";
 import Logo from "./components/Logo";
 import { CartItem, DEFAULT_SITE_SETTINGS, Order, Product, SiteSettings } from "./types";
@@ -28,13 +25,10 @@ import {
   createOrderInSupabase,
   updateOrderStatusInSupabase,
   getSiteSettings,
-  getOrCreateOAuthUserProfile,
-  signOutFromSupabase,
-  supabase,
 } from "./lib/supabaseClient";
 import { WompiCheckoutResult } from "./lib/wompi";
 
-import { Sliders, RefreshCw, Smartphone, Star, Map, ShieldAlert, CheckCircle, Instagram } from "lucide-react";
+import { Instagram } from "lucide-react";
 
 export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
@@ -50,16 +44,8 @@ export default function App() {
   const [currentView, setCurrentView] = useState<"store" | "checkout" | "success" | "admin">("store");
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
-  const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
-  
-  const [likedProducts, setLikedProducts] = useState<Record<string, boolean>>(() => {
-    const saved = localStorage.getItem("fragmentos_liked");
-    return saved ? JSON.parse(saved) : {};
-  });
 
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem("fragmentos_products");
@@ -129,11 +115,6 @@ export default function App() {
     const saved = localStorage.getItem("fragmentos_user");
     return saved ? JSON.parse(saved) : null;
   });
-  const currentUserRef = useRef(currentUser);
-
-  useEffect(() => {
-    currentUserRef.current = currentUser;
-  }, [currentUser]);
 
   const playLoadingScreen = () => {
     setShowLoadingScreen(true);
@@ -146,10 +127,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("fragmentos_cart", JSON.stringify(cartItems));
   }, [cartItems]);
-
-  useEffect(() => {
-    localStorage.setItem("fragmentos_liked", JSON.stringify(likedProducts));
-  }, [likedProducts]);
 
   useEffect(() => {
     localStorage.setItem("fragmentos_products", JSON.stringify(products));
@@ -168,39 +145,6 @@ export default function App() {
       localStorage.removeItem("fragmentos_user");
     }
   }, [currentUser]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const syncAuthUser = async (authUser: any) => {
-      if (!authUser) {
-        if (mounted) setCurrentUser(null);
-        return;
-      }
-
-      const appUser = await getOrCreateOAuthUserProfile(authUser);
-      if (mounted && appUser) {
-        if (!currentUserRef.current) {
-          playLoadingScreen();
-        }
-        setCurrentUser(appUser);
-        setLoginOpen(false);
-      }
-    };
-
-    supabase.auth.getSession().then(({ data }) => {
-      syncAuthUser(data.session?.user || null);
-    });
-
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      syncAuthUser(session?.user || null);
-    });
-
-    return () => {
-      mounted = false;
-      subscription.subscription.unsubscribe();
-    };
-  }, []);
 
   // Fetch real-time products and orders from Supabase on load
   useEffect(() => {
@@ -336,15 +280,6 @@ export default function App() {
     deleteProductFromSupabase(id);
   };
 
-  const handleToggleLike = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!currentUser) {
-      setLoginRequiredOpen(true);
-      return;
-    }
-    setLikedProducts((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const totalCartCount = cartItems.reduce((acc, it) => acc + it.quantity, 0);
 
   const handleLogin = (username: string, email: string, isAdmin: boolean) => {
@@ -353,9 +288,7 @@ export default function App() {
     setLoginOpen(false);
   };
 
-  const handleLogout = async () => {
-    setProfileOpen(false);
-    await signOutFromSupabase();
+  const handleLogout = () => {
     setCurrentUser(null);
   };
 
@@ -469,7 +402,7 @@ export default function App() {
               onClick={() => setLoginOpen(true)}
               className="text-xs font-mono tracking-widest uppercase text-brand-navy/60 hover:text-brand-terracotta transition-colors underline font-semibold"
             >
-              Administrador
+              Colaboradores
             </button>
           </div>
         </div>
@@ -480,21 +413,12 @@ export default function App() {
         currentView={currentView}
         cartCount={totalCartCount}
         onOpenCart={() => setCartOpen(true)}
-        onOpenFavorites={() => {
-          if (!currentUser) {
-            setLoginRequiredOpen(true);
-          } else {
-            setFavoritesOpen(true);
-          }
-        }}
         onScrollToSection={handleScrollToSection}
         onOpenAdmin={() => {
           setCurrentView("admin");
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
         currentUser={currentUser}
-        onLoginClick={() => setLoginOpen(true)}
-        onOpenProfile={() => setProfileOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -511,8 +435,6 @@ export default function App() {
             onAddToCart={handleAddToCart}
             onOpenCart={() => setCartOpen(true)}
             onSelectProductInMap={handleSelectProductInMap}
-            likedProducts={likedProducts}
-            onToggleLike={handleToggleLike}
             products={products}
           />
 
@@ -529,6 +451,7 @@ export default function App() {
               <div className="flex gap-6 uppercase tracking-wider text-[10px]">
                 <button onClick={() => handleScrollToSection("catalogo")} className="hover:text-white transition-colors">Colección</button>
                 <button onClick={() => handleScrollToSection("sostenibilidad")} className="hover:text-white transition-colors">Sostenibilidad</button>
+                <button onClick={() => setLoginOpen(true)} className="hover:text-white transition-colors">Colaboradores</button>
                 {currentUser?.isAdmin && (
                   <button onClick={() => setCurrentView("admin")} className="hover:text-white text-zinc-500 transition-colors">Administrador</button>
                 )}
@@ -588,16 +511,6 @@ export default function App() {
         </main>
       )}
 
-      {/* Call to Action Drawers & Modals */}
-      <FavoritesDrawer
-        isOpen={favoritesOpen}
-        onClose={() => setFavoritesOpen(false)}
-        likedProducts={likedProducts}
-        onToggleLike={handleToggleLike}
-        products={products}
-        onScrollToSection={handleScrollToSection}
-      />
-
       {/* Cart Sliding Overlay */}
       <Cart
         isOpen={cartOpen}
@@ -613,20 +526,6 @@ export default function App() {
         isOpen={loginOpen}
         onClose={() => setLoginOpen(false)}
         onLogin={handleLogin}
-      />
-
-      {currentUser && (
-        <UserProfileModal
-          isOpen={profileOpen}
-          onClose={() => setProfileOpen(false)}
-          username={currentUser.username}
-        />
-      )}
-
-      <LoginRequiredModal
-        isOpen={loginRequiredOpen}
-        onClose={() => setLoginRequiredOpen(false)}
-        onOpenLogin={() => setLoginOpen(true)}
       />
 
       {/* Global Footer */}

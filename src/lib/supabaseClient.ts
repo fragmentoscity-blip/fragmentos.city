@@ -4,16 +4,11 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { UserProfile } from "../types";
 
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || "";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
-}
 
 /**
  * Uploads a file (image/video) to Supabase Storage.
@@ -203,18 +198,6 @@ export async function updateOrderStatusInSupabase(orderId: string, status: strin
   }
 }
 
-export async function signInWithGoogle() {
-  const redirectTo = window.location.origin;
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo },
-  });
-
-  if (error) {
-    throw error;
-  }
-}
-
 export async function authenticateManualUser(login: string, password: string): Promise<{ username: string; email: string; isAdmin: boolean } | null> {
   try {
     const cleanLogin = login.trim().toLowerCase();
@@ -233,122 +216,16 @@ export async function authenticateManualUser(login: string, password: string): P
       return null;
     }
 
-    if (data.password !== cleanPassword) return null;
+    if (data.password !== cleanPassword || !data.is_admin) return null;
 
     return {
       username: data.username,
       email: data.email || data.username,
-      isAdmin: !!data.is_admin,
+      isAdmin: true,
     };
   } catch (err) {
     console.error("authenticateManualUser failed", err);
     return null;
-  }
-}
-
-export async function signOutFromSupabase() {
-  const { error } = await supabase.auth.signOut();
-  if (error) {
-    throw error;
-  }
-}
-
-export async function getOrCreateOAuthUserProfile(authUser: any): Promise<{ username: string; email: string; isAdmin: boolean } | null> {
-  try {
-    const cleanEmail = normalizeEmail(authUser?.email || "");
-    if (!cleanEmail) return null;
-
-    const { data: existingUser, error: selectError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("username", cleanEmail)
-      .maybeSingle();
-
-    if (selectError) {
-      console.warn("Could not retrieve OAuth user profile", selectError.message);
-      return { username: cleanEmail, email: cleanEmail, isAdmin: false };
-    }
-
-    if (existingUser) {
-      return {
-        username: existingUser.username,
-        email: existingUser.email || existingUser.username,
-        isAdmin: !!existingUser.is_admin,
-      };
-    }
-
-    const fullName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || "";
-
-    const { error: insertError } = await supabase
-      .from("users")
-      .insert({
-        username: cleanEmail,
-        email: cleanEmail,
-        password: "oauth:google",
-        is_admin: false,
-        full_name: fullName,
-        updated_at: new Date().toISOString(),
-      });
-
-    if (insertError) {
-      console.warn("Could not create OAuth user profile", insertError.message);
-    }
-
-    return { username: cleanEmail, email: cleanEmail, isAdmin: false };
-  } catch (err) {
-    console.error("getOrCreateOAuthUserProfile failed", err);
-    return null;
-  }
-}
-export async function getUserProfile(username: string): Promise<UserProfile | null> {
-  try {
-    const cleanUsername = normalizeEmail(username);
-    const { data, error } = await supabase
-      .from("users")
-      .select("username,email,full_name,phone,document_id,department,city,address,updated_at")
-      .eq("username", cleanUsername)
-      .maybeSingle();
-
-    if (error || !data) {
-      if (error) console.warn("Could not retrieve user profile", error.message);
-      return null;
-    }
-
-    return {
-      username: data.username,
-      email: data.email || data.username,
-      full_name: data.full_name || "",
-      phone: data.phone || "",
-      document_id: data.document_id || "",
-      department: data.department || "",
-      city: data.city || "",
-      address: data.address || "",
-      updated_at: data.updated_at,
-    };
-  } catch (err) {
-    console.error("getUserProfile failed", err);
-    return null;
-  }
-}
-
-export async function updateUserProfileField(
-  username: string,
-  field: keyof Pick<UserProfile, "full_name" | "phone" | "document_id" | "department" | "city" | "address">,
-  value: string
-) {
-  try {
-    const { error } = await supabase
-      .from("users")
-      .update({ [field]: value.trim(), updated_at: new Date().toISOString() })
-      .eq("username", normalizeEmail(username));
-
-    if (error) {
-      return { success: false, message: error.message };
-    }
-
-    return { success: true, message: "Dato guardado." };
-  } catch (err: any) {
-    return { success: false, message: err.message || "No se pudo guardar el dato." };
   }
 }
 

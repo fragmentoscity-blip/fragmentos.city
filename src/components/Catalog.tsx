@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
-import { Check, ShoppingBag, Eye, Heart, MapPin, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { ShoppingBag, Eye, MapPin } from "lucide-react";
 import { Product, FrameSize, FrameColor, CartItem } from "../types";
 
 export const INITIAL_PRODUCTS: Product[] = [
@@ -52,12 +52,10 @@ interface CatalogProps {
   onAddToCart: (item: CartItem) => void;
   onOpenCart: () => void;
   onSelectProductInMap: (lat: number, lng: number, zoom: number, name: string) => void;
-  likedProducts: Record<string, boolean>;
-  onToggleLike: (id: string, e: React.MouseEvent) => void;
   products: Product[];
 }
 
-export default function Catalog({ onAddToCart, onOpenCart, onSelectProductInMap, likedProducts, onToggleLike, products }: CatalogProps) {
+export default function Catalog({ onAddToCart, onOpenCart, onSelectProductInMap, products }: CatalogProps) {
   // Variant states for active product customization modal
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeSize, setActiveSize] = useState<FrameSize>("18x18");
@@ -162,15 +160,6 @@ export default function Catalog({ onAddToCart, onOpenCart, onSelectProductInMap,
                 
                 {/* Floating controls */}
                 <div className="absolute top-4 right-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
-                  <button
-                    onClick={(e) => onToggleLike(prod.id, e)}
-                    className="p-2.5 bg-white text-brand-navy border border-brand-gray/40 hover:border-brand-navy transition-colors"
-                    title="Añadir a deseos"
-                  >
-                    <Heart
-                      className={`w-4 h-4 ${likedProducts[prod.id] ? "fill-brand-terracotta text-brand-terracotta" : "text-gray-400"}`}
-                    />
-                  </button>
                   <button
                     onClick={() => onSelectProductInMap(prod.details.lat, prod.details.lng, prod.details.zoom, prod.name)}
                     className="p-2.5 bg-white text-brand-navy border border-brand-gray/40 hover:border-brand-navy transition-colors"
