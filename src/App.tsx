@@ -25,6 +25,10 @@ import {
   createOrderInSupabase,
   updateOrderStatusInSupabase,
   getSiteSettings,
+  getCurrentAdminUser,
+  signOutAdminUser,
+  supabase,
+  AdminUser,
 } from "./lib/supabaseClient";
 import { WompiCheckoutResult } from "./lib/wompi";
 
@@ -111,10 +115,7 @@ export default function App() {
     localStorage.setItem("fragmentos_construction_mode", String(settings.construction_mode));
   };
 
-  const [currentUser, setCurrentUser] = useState<{ username: string; email: string; isAdmin: boolean } | null>(() => {
-    const saved = localStorage.getItem("fragmentos_user");
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
 
   const playLoadingScreen = () => {
     setShowLoadingScreen(true);
@@ -137,14 +138,24 @@ export default function App() {
     localStorage.setItem("fragmentos_orders", JSON.stringify(orders));
   }, [orders]);
 
-  // Save user to localstorage
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem("fragmentos_user", JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem("fragmentos_user");
-    }
-  }, [currentUser]);
+    let mounted = true;
+
+    const syncAdminSession = async () => {
+      const adminUser = await getCurrentAdminUser();
+      if (mounted) setCurrentUser(adminUser);
+    };
+
+    syncAdminSession();
+    const { data: subscription } = supabase.auth.onAuthStateChange(() => {
+      syncAdminSession();
+    });
+
+    return () => {
+      mounted = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
 
   // Fetch real-time products and orders from Supabase on load
   useEffect(() => {
@@ -284,11 +295,12 @@ export default function App() {
 
   const handleLogin = (username: string, email: string, isAdmin: boolean) => {
     playLoadingScreen();
-    setCurrentUser({ username, email, isAdmin });
+    setCurrentUser({ username, email, isAdmin: true });
     setLoginOpen(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOutAdminUser();
     setCurrentUser(null);
   };
 

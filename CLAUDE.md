@@ -51,7 +51,7 @@ El acceso a `"admin"` requiere `currentUser.isAdmin === true`.
 |---|---|
 | `products` | Catálogo de productos (CRUD completo) |
 | `orders` | Pedidos de clientes |
-| `users` | Usuarios y admins (contraseñas en texto plano — no usa Supabase Auth) |
+| `users` | Perfiles admin vinculados a Supabase Auth (`auth_user_id`, `is_admin`) |
 | `site_settings` | Configuración global del sitio (fila única id=1) |
 
 ## Supabase — Storage
@@ -76,9 +76,10 @@ SUPABASE_SERVICE_ROLE_KEY=...
 Usarlos como: `bg-brand-navy`, `text-brand-terracotta`, etc.
 
 ## Autenticación Admin
-- Login: `admin` / `admin123` (fallback hardcodeado en LoginModal si Supabase falla)
-- El admin accede al panel via Navbar → ícono de escudo
-- `currentUser.isAdmin === true` habilita el acceso
+- Supabase Auth valida email y contraseña.
+- `public.users.auth_user_id` vincula el usuario Auth con permisos admin.
+- `currentUser.isAdmin === true` habilita el acceso.
+- El admin accede desde el botón `Colaboradores`.
 
 ## Comandos
 ```bash

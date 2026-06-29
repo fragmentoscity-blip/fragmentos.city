@@ -5,7 +5,7 @@
 
 import { FormEvent, useState } from "react";
 import { Loader2, Lock, LogIn, User, X } from "lucide-react";
-import { authenticateManualUser } from "../lib/supabaseClient";
+import { authenticateAdminUser } from "../lib/supabaseClient";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ interface LoginModalProps {
 }
 
 export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
-  const [login, setLogin] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loadingMode, setLoadingMode] = useState<"google" | "manual" | "">("");
   const [error, setError] = useState("");
@@ -27,13 +27,13 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
     event.preventDefault();
     setError("");
 
-    if (!login.trim() || !password.trim()) {
-      setError("Ingresa tu usuario o correo y contrasena.");
+    if (!email.trim() || !password.trim()) {
+      setError("Ingresa tu correo y contrasena.");
       return;
     }
 
     setLoadingMode("manual");
-    const user = await authenticateManualUser(login, password);
+    const user = await authenticateAdminUser(email, password);
     setLoadingMode("");
 
     if (!user) {
@@ -42,7 +42,7 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
     }
 
     onLogin(user.username, user.email, user.isAdmin);
-    setLogin("");
+    setEmail("");
     setPassword("");
     onClose();
   };
@@ -73,15 +73,15 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
         <form onSubmit={handleManualLogin} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-[10px] font-mono tracking-[0.2em] font-bold uppercase text-black">
-              Usuario o correo
+              Correo
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-                placeholder="usuario o correo"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="correo@dominio.com"
                 disabled={isLoading}
                 className="w-full bg-[#FAFAFA] border border-gray-200 p-3 pl-10 text-sm focus:border-black outline-none transition-colors"
               />

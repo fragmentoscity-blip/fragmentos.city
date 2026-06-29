@@ -10,6 +10,71 @@ const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || "";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export interface AdminUser {
+  username: string;
+  email: string;
+  isAdmin: true;
+}
+
+async function getAdminProfileForAuthUser(authUser: any): Promise<AdminUser | null> {
+  const authUserId = authUser?.id;
+  const email = authUser?.email || "";
+  if (!authUserId || !email) return null;
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("username,email,is_admin")
+    .eq("auth_user_id", authUserId)
+    .eq("is_admin", true)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) console.warn("Admin profile lookup failed", error.message);
+    return null;
+  }
+
+  return {
+    username: data.username || email,
+    email: data.email || email,
+    isAdmin: true,
+  };
+}
+
+export async function getCurrentAdminUser(): Promise<AdminUser | null> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  return getAdminProfileForAuthUser(data.user);
+}
+
+export async function authenticateAdminUser(email: string, password: string): Promise<AdminUser | null> {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPassword = password.trim();
+  if (!cleanEmail || !cleanPassword) return null;
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: cleanEmail,
+    password: cleanPassword,
+  });
+
+  if (error || !data.user) {
+    if (error) console.warn("Supabase Auth login failed", error.message);
+    return null;
+  }
+
+  const adminUser = await getAdminProfileForAuthUser(data.user);
+  if (!adminUser) {
+    await supabase.auth.signOut();
+    return null;
+  }
+
+  return adminUser;
+}
+
+export async function signOutAdminUser() {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
 /**
  * Uploads a file (image/video) to Supabase Storage.
  * Leverages the S3-powered Supabase buckets.
@@ -195,37 +260,6 @@ export async function updateOrderStatusInSupabase(orderId: string, status: strin
     }
   } catch (err) {
     console.error("Supabase status update failed", err);
-  }
-}
-
-export async function authenticateManualUser(login: string, password: string): Promise<{ username: string; email: string; isAdmin: boolean } | null> {
-  try {
-    const cleanLogin = login.trim().toLowerCase();
-    const cleanPassword = password.trim();
-
-    if (!cleanLogin || !cleanPassword) return null;
-
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .or(`username.eq.${cleanLogin},email.eq.${cleanLogin}`)
-      .maybeSingle();
-
-    if (error || !data) {
-      if (error) console.warn("Manual login failed", error.message);
-      return null;
-    }
-
-    if (data.password !== cleanPassword || !data.is_admin) return null;
-
-    return {
-      username: data.username,
-      email: data.email || data.username,
-      isAdmin: true,
-    };
-  } catch (err) {
-    console.error("authenticateManualUser failed", err);
-    return null;
   }
 }
 
