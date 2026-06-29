@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Catalog, { INITIAL_PRODUCTS } from "./components/Catalog";
@@ -17,6 +17,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import LoginModal from "./components/LoginModal";
 import LoginRequiredModal from "./components/LoginRequiredModal";
 import UserProfileModal from "./components/UserProfileModal";
+import LoadingScreen from "./components/LoadingScreen";
 import Logo from "./components/Logo";
 import { CartItem, DEFAULT_SITE_SETTINGS, Order, Product, SiteSettings } from "./types";
 import {
@@ -53,6 +54,7 @@ export default function App() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(true);
   
   const [likedProducts, setLikedProducts] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem("fragmentos_liked");
@@ -127,6 +129,15 @@ export default function App() {
     const saved = localStorage.getItem("fragmentos_user");
     return saved ? JSON.parse(saved) : null;
   });
+  const currentUserRef = useRef(currentUser);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  const playLoadingScreen = () => {
+    setShowLoadingScreen(true);
+  };
 
   // Cross-component coordinates focus state
   const [focusedLocation, setFocusedLocation] = useState<{ lat: number; lng: number; zoom: number; name: string } | null>(null);
@@ -169,6 +180,9 @@ export default function App() {
 
       const appUser = await getOrCreateOAuthUserProfile(authUser);
       if (mounted && appUser) {
+        if (!currentUserRef.current) {
+          playLoadingScreen();
+        }
         setCurrentUser(appUser);
         setLoginOpen(false);
       }
@@ -334,6 +348,7 @@ export default function App() {
   const totalCartCount = cartItems.reduce((acc, it) => acc + it.quantity, 0);
 
   const handleLogin = (username: string, email: string, isAdmin: boolean) => {
+    playLoadingScreen();
     setCurrentUser({ username, email, isAdmin });
     setLoginOpen(false);
   };
@@ -346,6 +361,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white text-brand-navy font-sans antialiased selection:bg-brand-navy selection:text-white">
+      {showLoadingScreen && (
+        <LoadingScreen
+          onComplete={() => setShowLoadingScreen(false)}
+        />
+      )}
       
       {/* Construction Mode Fullscreen Blurred Glass Overlay */}
       {constructionMode && !currentUser?.isAdmin && (
