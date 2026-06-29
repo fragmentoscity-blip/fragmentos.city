@@ -11,14 +11,8 @@ const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || "";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const registrationCodeEndpoint = (import.meta as any).env.VITE_REGISTRATION_CODE_ENDPOINT || "";
-
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
-}
-
-function createSixDigitCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 /**
@@ -209,156 +203,72 @@ export async function updateOrderStatusInSupabase(orderId: string, status: strin
   }
 }
 
-/**
- * Checks if a user is valid and matches the given password in Supabase.
- * Includes graceful local fallback in case Supabase credentials table isn't set up yet.
- */
-export async function authenticateUserWithSupabase(username: string, password: string): Promise<{ username: string; email: string; isAdmin: boolean } | null> {
-  try {
-    const cleanUsername = normalizeEmail(username);
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("username", cleanUsername)
-      .single();
+export async function signInWithGoogle() {
+  const redirectTo = window.location.origin;
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo },
+  });
 
-    if (error) {
-      console.warn("User not found or table error in Supabase users. Falling back.", error.message);
-      return null;
-    }
-
-    if (data && data.password === password.trim()) {
-      return {
-        username: data.username,
-        email: data.email || data.username,
-        isAdmin: !!data.is_admin,
-      };
-    }
-    
-    return null;
-  } catch (err) {
-    console.error("Supabase user query failed:", err);
-    return null;
+  if (error) {
+    throw error;
   }
 }
 
-export async function requestRegistrationCode(email: string): Promise<{ success: boolean; message: string; devCode?: string }> {
-  try {
-    const cleanEmail = normalizeEmail(email);
-    if (!/\S+@\S+\.\S+/.test(cleanEmail)) {
-      return { success: false, message: "Ingresa un correo válido." };
-    }
+export async function signOutFromSupabase() {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    throw error;
+  }
+}
 
-    const { data: existingUser } = await supabase
+export async function getOrCreateOAuthUserProfile(authUser: any): Promise<{ username: string; email: string; isAdmin: boolean } | null> {
+  try {
+    const cleanEmail = normalizeEmail(authUser?.email || "");
+    if (!cleanEmail) return null;
+
+    const { data: existingUser, error: selectError } = await supabase
       .from("users")
-      .select("username")
+      .select("*")
       .eq("username", cleanEmail)
       .maybeSingle();
 
+    if (selectError) {
+      console.warn("Could not retrieve OAuth user profile", selectError.message);
+      return { username: cleanEmail, email: cleanEmail, isAdmin: false };
+    }
+
     if (existingUser) {
-      return { success: false, message: "Este correo ya tiene una cuenta registrada." };
+      return {
+        username: existingUser.username,
+        email: existingUser.email || existingUser.username,
+        isAdmin: !!existingUser.is_admin,
+      };
     }
 
-    const code = createSixDigitCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const fullName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || "";
 
-    const { error } = await supabase
-      .from("registration_codes")
-      .upsert({
+    const { error: insertError } = await supabase
+      .from("users")
+      .insert({
+        username: cleanEmail,
         email: cleanEmail,
-        code,
-        expires_at: expiresAt,
-        verified: false,
-        created_at: new Date().toISOString(),
+        password: "oauth:google",
+        is_admin: false,
+        full_name: fullName,
+        updated_at: new Date().toISOString(),
       });
 
-    if (error) {
-      return { success: false, message: `No se pudo crear el código: ${error.message}` };
+    if (insertError) {
+      console.warn("Could not create OAuth user profile", insertError.message);
     }
 
-    if (registrationCodeEndpoint) {
-      const response = await fetch(registrationCodeEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail, code }),
-      });
-      if (!response.ok) {
-        return { success: false, message: "El código se generó, pero no se pudo enviar el correo." };
-      }
-      return { success: true, message: "Te enviamos un código de 6 dígitos a tu correo." };
-    }
-
-    return {
-      success: true,
-      message: "Código creado en Supabase. Configura VITE_REGISTRATION_CODE_ENDPOINT para enviarlo por correo.",
-      devCode: code,
-    };
-  } catch (err: any) {
-    return { success: false, message: err.message || "No se pudo solicitar el código." };
+    return { username: cleanEmail, email: cleanEmail, isAdmin: false };
+  } catch (err) {
+    console.error("getOrCreateOAuthUserProfile failed", err);
+    return null;
   }
 }
-
-export async function verifyRegistrationCode(email: string, code: string): Promise<{ success: boolean; message: string }> {
-  try {
-    const cleanEmail = normalizeEmail(email);
-    const cleanCode = code.replace(/\D/g, "");
-
-    const { data, error } = await supabase
-      .from("registration_codes")
-      .select("*")
-      .eq("email", cleanEmail)
-      .eq("code", cleanCode)
-      .maybeSingle();
-
-    if (error || !data) {
-      return { success: false, message: "Código incorrecto." };
-    }
-
-    if (new Date(data.expires_at).getTime() < Date.now()) {
-      return { success: false, message: "El código venció. Solicita uno nuevo." };
-    }
-
-    const { error: updateError } = await supabase
-      .from("registration_codes")
-      .update({ verified: true })
-      .eq("email", cleanEmail);
-
-    if (updateError) {
-      return { success: false, message: `No se pudo confirmar el correo: ${updateError.message}` };
-    }
-
-    return { success: true, message: "Correo confirmado. Crea tu contraseña." };
-  } catch (err: any) {
-    return { success: false, message: err.message || "No se pudo verificar el código." };
-  }
-}
-
-export async function completeRegistrationWithPassword(email: string, password: string): Promise<{ success: boolean; message: string }> {
-  try {
-    const cleanEmail = normalizeEmail(email);
-    const cleanPassword = password.trim();
-
-    if (cleanPassword.length < 8) {
-      return { success: false, message: "La contraseña debe tener mínimo 8 caracteres." };
-    }
-
-    const { data: codeData } = await supabase
-      .from("registration_codes")
-      .select("*")
-      .eq("email", cleanEmail)
-      .eq("verified", true)
-      .maybeSingle();
-
-    if (!codeData) {
-      return { success: false, message: "Primero confirma el correo con el código enviado." };
-    }
-
-    return registerUserInSupabase(cleanEmail, cleanPassword, false);
-  } catch (err: any) {
-    return { success: false, message: err.message || "No se pudo completar el registro." };
-  }
-}
-
 export async function getUserProfile(username: string): Promise<UserProfile | null> {
   try {
     const cleanUsername = normalizeEmail(username);
@@ -484,50 +394,5 @@ export async function deleteMediaFile(fileName: string, bucketName = "media") {
   } catch (err) {
     console.error("deleteMediaFile failed:", err);
     return false;
-  }
-}
-
-/**
- * Registers a new user directly inside Supabase credentials database.
- * If successful, returns true, otherwise throws or returns false.
- */
-export async function registerUserInSupabase(username: string, password: string, isAdmin = false): Promise<{ success: boolean; message: string }> {
-  try {
-    const cleanUsername = username.trim().toLowerCase();
-    const cleanPassword = password.trim();
-
-    if (!cleanUsername || !cleanPassword) {
-      return { success: false, message: "Usuario y contraseña requeridos." };
-    }
-
-    // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from("users")
-      .select("username")
-      .eq("username", cleanUsername)
-      .maybeSingle();
-
-    if (existingUser) {
-      return { success: false, message: "El usuario ya existe en Supabase." };
-    }
-
-    // Insert user
-    const { error } = await supabase
-      .from("users")
-      .insert({
-        username: cleanUsername,
-        email: cleanUsername,
-        password: cleanPassword,
-        is_admin: isAdmin,
-      });
-
-    if (error) {
-      return { success: false, message: `Error registering database user: ${error.message}` };
-    }
-
-    return { success: true, message: "Usuario registrado con éxito en la base de datos de Supabase." };
-  } catch (err: any) {
-    console.error("Supabase registration error:", err);
-    return { success: false, message: err.message || "Error de conexión con Supabase." };
   }
 }

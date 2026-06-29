@@ -27,6 +27,9 @@ import {
   createOrderInSupabase,
   updateOrderStatusInSupabase,
   getSiteSettings,
+  getOrCreateOAuthUserProfile,
+  signOutFromSupabase,
+  supabase,
 } from "./lib/supabaseClient";
 import { WompiCheckoutResult } from "./lib/wompi";
 
@@ -154,6 +157,36 @@ export default function App() {
       localStorage.removeItem("fragmentos_user");
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const syncAuthUser = async (authUser: any) => {
+      if (!authUser) {
+        if (mounted) setCurrentUser(null);
+        return;
+      }
+
+      const appUser = await getOrCreateOAuthUserProfile(authUser);
+      if (mounted && appUser) {
+        setCurrentUser(appUser);
+        setLoginOpen(false);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      syncAuthUser(data.session?.user || null);
+    });
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      syncAuthUser(session?.user || null);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
 
   // Fetch real-time products and orders from Supabase on load
   useEffect(() => {
@@ -300,13 +333,9 @@ export default function App() {
 
   const totalCartCount = cartItems.reduce((acc, it) => acc + it.quantity, 0);
 
-  const handleLogin = (username: string, email: string, isAdmin: boolean) => {
-    setCurrentUser({ username, email, isAdmin });
-    setLoginOpen(false);
-  };
-
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setProfileOpen(false);
+    await signOutFromSupabase();
     setCurrentUser(null);
   };
 
@@ -558,7 +587,6 @@ export default function App() {
       <LoginModal
         isOpen={loginOpen}
         onClose={() => setLoginOpen(false)}
-        onLogin={handleLogin}
       />
 
       {currentUser && (

@@ -59,7 +59,7 @@ CREATE POLICY "Permitir actualización de órdenes para prototipo" ON public.ord
 CREATE TABLE IF NOT EXISTS public.users (
     username TEXT PRIMARY KEY,
     email TEXT,
-    password TEXT NOT NULL,
+    password TEXT,
     is_admin BOOLEAN DEFAULT false NOT NULL,
     full_name TEXT DEFAULT '',
     phone TEXT DEFAULT '',
@@ -81,14 +81,6 @@ ALTER TABLE public.users
     ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '',
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;
 
-CREATE TABLE IF NOT EXISTS public.registration_codes (
-    email TEXT PRIMARY KEY,
-    code TEXT NOT NULL,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    verified BOOLEAN DEFAULT false NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
 -- Habilitar RLS en users
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Permitir lectura pública/autenticada de usuarios" ON public.users
@@ -97,10 +89,6 @@ CREATE POLICY "Permitir inserción pública de usuarios (registro)" ON public.us
     FOR INSERT TO public WITH CHECK (true);
 CREATE POLICY "Permitir actualizaciones a todos los campos en prototipo" ON public.users
     FOR ALL TO public USING (true);
-
-ALTER TABLE public.registration_codes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Permitir flujo publico de codigos de registro" ON public.registration_codes
-    FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- Sembrar credenciales iniciales por defecto si no existen
 INSERT INTO public.users (username, email, password, is_admin)
