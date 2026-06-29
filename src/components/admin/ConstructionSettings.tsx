@@ -3,6 +3,7 @@ import { X, Instagram, Facebook, MessageCircle, Calendar, Mail, Image as ImageIc
 import { SiteSettings } from "../../types";
 import { AdminButton, AdminToggle } from "./AdminButtons";
 import { uploadToSupabaseStorage } from "../../lib/supabaseClient";
+import { formatDateOnly } from "../../lib/date";
 
 interface ConstructionSettingsProps {
   settings: SiteSettings;
@@ -253,7 +254,7 @@ function ConstructionPreview({ settings, onClose }: { settings: SiteSettings; on
           {settings.construction_open_date && (
             <div className="flex items-center gap-2 text-brand-terracotta text-sm font-mono mb-6">
               <Calendar className="w-4 h-4" />
-              Apertura: {new Date(settings.construction_open_date).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}
+              Apertura: {formatDateOnly(settings.construction_open_date)}
             </div>
           )}
           {settings.construction_email && (

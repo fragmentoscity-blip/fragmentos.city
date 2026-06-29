@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { X, Upload, Loader2, Check, MapPin } from "lucide-react";
-import { Product } from "../../types";
+import { FrameColor, FrameSize, Product } from "../../types";
 import { uploadToSupabaseStorage } from "../../lib/supabaseClient";
 import { AdminButton } from "./AdminButtons";
 import MediaLibrary from "./MediaLibrary";
@@ -11,12 +11,11 @@ interface ContentEditorProps {
   onClose: () => void;
 }
 
-type Tab = "general" | "contenido" | "multimedia" | "seo" | "configuracion" | "variantes" | "publicacion";
+type Tab = "general" | "contenido" | "seo" | "configuracion" | "variantes" | "publicacion";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "general",       label: "Info General" },
   { id: "contenido",     label: "Contenido" },
-  { id: "multimedia",    label: "Multimedia" },
   { id: "seo",           label: "SEO" },
   { id: "configuracion", label: "Configuración" },
   { id: "variantes",     label: "Variantes" },
@@ -35,6 +34,8 @@ const PRESET_CITIES = [
 
 const inputClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-terracotta transition-colors";
 const labelClass = "text-[10px] font-mono uppercase tracking-widest text-white/50 block mb-1.5";
+const FRAME_SIZES: FrameSize[] = ["10x10", "18x18"];
+const FRAME_COLORS: FrameColor[] = ["Madera natural", "Negro", "Blanco"];
 
 export default function ContentEditor({ product, onSave, onClose }: ContentEditorProps) {
   const isNew = !product?.id;
@@ -62,6 +63,12 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
   const [slug, setSlug] = useState(product?.id?.replace("frag_", "") ?? "");
   const [keywords, setKeywords] = useState("");
   const [category, setCategory] = useState("Ciudades");
+  const [availableSizes, setAvailableSizes] = useState<FrameSize[]>(
+    product?.details?.variants?.sizes?.length ? product.details.variants.sizes : FRAME_SIZES
+  );
+  const [availableColors, setAvailableColors] = useState<FrameColor[]>(
+    product?.details?.variants?.colors?.length ? product.details.variants.colors : FRAME_COLORS
+  );
 
   const handlePriceChange = (price: number) => {
     setBasePrice(price);
@@ -75,6 +82,16 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
   const handleDiscountChange = (pct: number | undefined) => {
     setDiscountPercent(pct);
     if (pct && originalPrice) setBasePrice(Math.round(originalPrice * (1 - pct / 100)));
+  };
+  const toggleSize = (size: FrameSize) => {
+    setAvailableSizes((current) =>
+      current.includes(size) ? current.filter((item) => item !== size) : [...current, size]
+    );
+  };
+  const toggleColor = (color: FrameColor) => {
+    setAvailableColors((current) =>
+      current.includes(color) ? current.filter((item) => item !== color) : [...current, color]
+    );
   };
 
   const handleImageUpload = async (file: File) => {
@@ -93,6 +110,11 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
 
   const handleSave = async () => {
     if (!name.trim()) { setActiveTab("general"); return; }
+    if (availableSizes.length === 0 || availableColors.length === 0) {
+      setActiveTab("variantes");
+      setSaveError("Activa al menos un tamano y un color de marco.");
+      return;
+    }
     setSaving(true);
     setSaveError("");
     const saved: Product = {
@@ -104,7 +126,15 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
       discountPercent,
       image,
       stock,
-      details: { lat: Number(lat), lng: Number(lng), zoom: Number(zoom) },
+      details: {
+        lat: Number(lat),
+        lng: Number(lng),
+        zoom: Number(zoom),
+        variants: {
+          sizes: availableSizes,
+          colors: availableColors,
+        },
+      },
     };
     try {
       await onSave(saved);
@@ -202,8 +232,58 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
             </div>
           )}
 
-          {/* Multimedia */}
-          {activeTab === "multimedia" && (
+          {activeTab === "contenido" && (
+            <div className="mt-4 pt-4 border-t border-white/10 space-y-4">
+              <label className={labelClass}>Imagen Principal</label>
+              {image && (
+                <img src={image} alt="preview" className="h-40 rounded-xl object-contain bg-white/5 border border-white/10 p-2" />
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div
+                  className="border-2 border-dashed border-white/15 hover:border-brand-terracotta rounded-2xl p-6 text-center cursor-pointer transition-colors flex flex-col items-center gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? (
+                    <Loader2 className="w-6 h-6 text-brand-terracotta animate-spin" />
+                  ) : (
+                    <Upload className="w-6 h-6 text-white/30" />
+                  )}
+                  <span className="text-xs text-white/40">{uploading ? "Subiendo..." : "Subir desde equipo"}</span>
+                  <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); }} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMediaPicker(true)}
+                  className="border-2 border-dashed border-white/15 hover:border-brand-terracotta rounded-2xl p-6 text-center cursor-pointer transition-colors flex flex-col items-center gap-2"
+                >
+                  <Upload className="w-6 h-6 text-white/30" />
+                  <span className="text-xs text-white/40">Seleccionar de la biblioteca</span>
+                </button>
+              </div>
+              <div>
+                <label className={labelClass}>URL directa (opcional)</label>
+                <input type="text" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." className={inputClass} />
+              </div>
+
+              {showMediaPicker && (
+                <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="w-full max-w-4xl bg-[#0f1923] rounded-2xl border border-white/10 p-6 max-h-[90vh] overflow-y-auto">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-sm font-semibold text-white">Seleccionar imagen</h3>
+                      <button onClick={() => setShowMediaPicker(false)} className="text-white/40 hover:text-white"><X className="w-5 h-5" /></button>
+                    </div>
+                    <MediaLibrary
+                      selectionMode
+                      onSelect={(url) => { setImage(url); setShowMediaPicker(false); }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Legacy image picker */}
+          {false && (
             <div className="space-y-4">
               <label className={labelClass}>Imagen Principal</label>
               {image && (
@@ -318,22 +398,40 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
               <div className="bg-white/5 rounded-2xl border border-white/10 p-4 space-y-3">
                 <p className="text-xs text-white/50 font-mono uppercase tracking-widest">Tamaños disponibles</p>
                 <div className="flex gap-3">
-                  {["10x10 cm", "18x18 cm"].map((s) => (
-                    <div key={s} className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-sm text-white font-mono">{s}</span>
-                    </div>
+                  {FRAME_SIZES.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => toggleSize(size)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
+                        availableSizes.includes(size)
+                          ? "bg-emerald-500/10 border-emerald-500/20"
+                          : "bg-white/5 border-white/10 opacity-50"
+                      }`}
+                    >
+                      <Check className={`w-3.5 h-3.5 ${availableSizes.includes(size) ? "text-emerald-400" : "text-white/20"}`} />
+                      <span className="text-sm text-white font-mono">{size} cm</span>
+                    </button>
                   ))}
                 </div>
               </div>
               <div className="bg-white/5 rounded-2xl border border-white/10 p-4 space-y-3">
                 <p className="text-xs text-white/50 font-mono uppercase tracking-widest">Colores de marco</p>
                 <div className="flex flex-wrap gap-3">
-                  {["Madera natural", "Negro", "Blanco"].map((c) => (
-                    <div key={c} className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-sm text-white">{c}</span>
-                    </div>
+                  {FRAME_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => toggleColor(color)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
+                        availableColors.includes(color)
+                          ? "bg-emerald-500/10 border-emerald-500/20"
+                          : "bg-white/5 border-white/10 opacity-50"
+                      }`}
+                    >
+                      <Check className={`w-3.5 h-3.5 ${availableColors.includes(color) ? "text-emerald-400" : "text-white/20"}`} />
+                      <span className="text-sm text-white">{color}</span>
+                    </button>
                   ))}
                 </div>
               </div>

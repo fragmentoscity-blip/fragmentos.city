@@ -7,6 +7,9 @@ import { useState } from "react";
 import { ShoppingBag, Eye, MapPin } from "lucide-react";
 import { Product, FrameSize, FrameColor, CartItem } from "../types";
 
+const FRAME_SIZES: FrameSize[] = ["10x10", "18x18"];
+const FRAME_COLORS: FrameColor[] = ["Madera natural", "Negro", "Blanco"];
+
 export const INITIAL_PRODUCTS: Product[] = [
   {
     id: "frag_bog",
@@ -82,23 +85,26 @@ export default function Catalog({ onAddToCart, onOpenCart, onSelectProductInMap,
     }
     return current.originalPrice;
   };
+  const getAvailableSizes = (product: Product): FrameSize[] =>
+    product.details?.variants?.sizes?.length ? product.details.variants.sizes : FRAME_SIZES;
+  const getAvailableColors = (product: Product): FrameColor[] =>
+    product.details?.variants?.colors?.length ? product.details.variants.colors : FRAME_COLORS;
 
   const openCustomizerModal = (product: Product) => {
+    const sizes = getAvailableSizes(product);
+    const colors = getAvailableColors(product);
     setSelectedProduct(product);
-    setActiveSize("18x18");
+    setActiveSize(sizes.includes("18x18") ? "18x18" : sizes[0]);
     
     // Set matching default frame color to represent initial beautiful generated imagery
-    if (product.id === "frag_par") {
-      setActiveColor("Negro");
-    } else if (product.id === "frag_bar") {
-      setActiveColor("Blanco");
-    } else {
-      setActiveColor("Madera natural");
-    }
+    const preferredColor: FrameColor =
+      product.id === "frag_par" ? "Negro" : product.id === "frag_bar" ? "Blanco" : "Madera natural";
+    setActiveColor(colors.includes(preferredColor) ? preferredColor : colors[0]);
   };
 
   const handleAddToCart = () => {
     if (!selectedProduct) return;
+    if (!getAvailableSizes(selectedProduct).includes(activeSize) || !getAvailableColors(selectedProduct).includes(activeColor)) return;
 
     const price = getPrice(activeSize, selectedProduct);
     const cartId = `${selectedProduct.id}_${activeSize}_${activeColor.replace(/\s+/g, "")}`;
@@ -270,42 +276,27 @@ export default function Catalog({ onAddToCart, onOpenCart, onSelectProductInMap,
                   1. Dimensiones del Cuadro
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setActiveSize("10x10")}
-                    className={`py-4 text-center transition-all text-xs uppercase tracking-widest border ${
-                      activeSize === "10x10"
-                        ? "border-black bg-white text-black font-bold"
-                        : "border-gray-200 bg-white text-gray-400 hover:border-gray-400"
-                    }`}
-                  >
-                    <div>10 x 10 cm</div>
-                    <div className="text-[9px] font-mono tracking-widest mt-1 opacity-80">
-                      {getOriginalPrice("10x10", selectedProduct) && (
-                        <span className="line-through text-gray-400 mr-1">COP {getOriginalPrice("10x10", selectedProduct)?.toLocaleString()}</span>
-                      )}
-                      <span className={getOriginalPrice("10x10", selectedProduct) ? "text-brand-terracotta font-bold" : ""}>
-                        COP {getPrice("10x10", selectedProduct).toLocaleString()}
-                      </span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setActiveSize("18x18")}
-                    className={`py-4 text-center transition-all text-xs uppercase tracking-widest border ${
-                      activeSize === "18x18"
-                        ? "border-black bg-white text-black font-bold"
-                        : "border-gray-200 bg-white text-gray-400 hover:border-gray-400"
-                    }`}
-                  >
-                    <div>18 x 18 cm</div>
-                    <div className="text-[9px] font-mono tracking-widest mt-1 opacity-80">
-                      {getOriginalPrice("18x18", selectedProduct) && (
-                        <span className="line-through text-gray-400 mr-1">COP {getOriginalPrice("18x18", selectedProduct)?.toLocaleString()}</span>
-                      )}
-                      <span className={getOriginalPrice("18x18", selectedProduct) ? "text-brand-terracotta font-bold" : ""}>
-                        COP {getPrice("18x18", selectedProduct).toLocaleString()}
-                      </span>
-                    </div>
-                  </button>
+                  {getAvailableSizes(selectedProduct).map((size) => (
+                    <button
+                      key={size}
+                      onClick={() => setActiveSize(size)}
+                      className={`py-4 text-center transition-all text-xs uppercase tracking-widest border ${
+                        activeSize === size
+                          ? "border-black bg-white text-black font-bold"
+                          : "border-gray-200 bg-white text-gray-400 hover:border-gray-400"
+                      }`}
+                    >
+                      <div>{size.replace("x", " x ")} cm</div>
+                      <div className="text-[9px] font-mono tracking-widest mt-1 opacity-80">
+                        {getOriginalPrice(size, selectedProduct) && (
+                          <span className="line-through text-gray-400 mr-1">COP {getOriginalPrice(size, selectedProduct)?.toLocaleString()}</span>
+                        )}
+                        <span className={getOriginalPrice(size, selectedProduct) ? "text-brand-terracotta font-bold" : ""}>
+                          COP {getPrice(size, selectedProduct).toLocaleString()}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -315,7 +306,7 @@ export default function Catalog({ onAddToCart, onOpenCart, onSelectProductInMap,
                   2. Color de Acabado del Marco
                 </label>
                 <div className="flex space-x-6 items-center">
-                  {(["Madera natural", "Negro", "Blanco"] as FrameColor[]).map((framecol) => (
+                  {getAvailableColors(selectedProduct).map((framecol) => (
                     <button
                       key={framecol}
                       onClick={() => setActiveColor(framecol)}

@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export type FrameSize = "10x10" | "18x18";
+export type FrameColor = "Madera natural" | "Negro" | "Blanco";
+
 export interface Product {
   id: string;
   name: string;
@@ -16,11 +19,12 @@ export interface Product {
     lat: number;
     lng: number;
     zoom: number;
+    variants?: {
+      sizes: FrameSize[];
+      colors: FrameColor[];
+    };
   };
 }
-
-export type FrameSize = "10x10" | "18x18";
-export type FrameColor = "Madera natural" | "Negro" | "Blanco";
 
 export interface CartItem {
   id: string; // Unique ID for cart item (productID_size_color or customID)

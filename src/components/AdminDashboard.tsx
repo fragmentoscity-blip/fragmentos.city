@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import {
-  ShieldCheck, Globe, LayoutGrid, Image as ImageIcon,
+  ShieldCheck, Globe, LayoutGrid,
   ShoppingBag, Activity, Database, Truck, Calendar,
   MapPin, Eye, HelpCircle,
 } from "lucide-react";
 import { Order, Product, SiteSettings } from "../types";
 import SitePanel from "./admin/SitePanel";
 import ContentManager from "./admin/ContentManager";
-import MediaLibrary from "./admin/MediaLibrary";
 
 interface AdminDashboardProps {
   orders: Order[];
@@ -23,12 +22,11 @@ interface AdminDashboardProps {
   onNavigateToStore?: () => void;
 }
 
-type AdminTab = "sitio" | "contenido" | "multimedia" | "ordenes";
+type AdminTab = "sitio" | "contenido" | "ordenes";
 
 const TABS: { id: AdminTab; label: string; icon: React.ElementType }[] = [
   { id: "sitio",      label: "Sitio",       icon: Globe },
   { id: "contenido",  label: "Contenido",   icon: LayoutGrid },
-  { id: "multimedia", label: "Multimedia",  icon: ImageIcon },
   { id: "ordenes",    label: "Órdenes",     icon: ShoppingBag },
 ];
 
@@ -114,17 +112,6 @@ export default function AdminDashboard({
             onEditProduct={onEditProduct}
             onDeleteProduct={onDeleteProduct}
           />
-        )}
-
-        {/* Tab: Multimedia */}
-        {activeTab === "multimedia" && (
-          <div className="bg-[#162231] rounded-2xl border border-white/10 p-6 shadow-xl">
-            <div className="flex items-center gap-2 mb-6">
-              <ImageIcon className="w-5 h-5 text-brand-terracotta" />
-              <h2 className="text-base font-semibold text-white">Biblioteca Multimedia</h2>
-            </div>
-            <MediaLibrary />
-          </div>
         )}
 
         {/* Tab: Órdenes */}

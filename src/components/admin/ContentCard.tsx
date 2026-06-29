@@ -17,7 +17,7 @@ export default function ContentCard({
   const [expanded, setExpanded] = useState(false);
 
   const isPublished = product.stock > 0;
-  const variantCount = 2 * 3; // 2 sizes × 3 colors
+  const variantCount = (product.details?.variants?.sizes?.length || 2) * (product.details?.variants?.colors?.length || 3);
 
   return (
     <div className={`bg-[#162231] rounded-2xl border transition-all shadow-lg overflow-hidden ${

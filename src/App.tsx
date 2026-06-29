@@ -31,6 +31,7 @@ import {
   AdminUser,
 } from "./lib/supabaseClient";
 import { WompiCheckoutResult } from "./lib/wompi";
+import { formatDateOnly } from "./lib/date";
 
 import { Instagram } from "lucide-react";
 
@@ -352,11 +353,7 @@ export default function App() {
                       LANZAMIENTO OFICIAL
                     </span>
                     <div className="text-3xl md:text-4xl font-serif font-bold text-brand-navy">
-                      {new Date(siteSettings.construction_open_date).toLocaleDateString("es-CO", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })}
+                      {formatDateOnly(siteSettings.construction_open_date)}
                     </div>
                   </>
                 )}
