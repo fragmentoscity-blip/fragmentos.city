@@ -4,23 +4,22 @@ import {
   ShoppingBag, Activity, Database, Truck, Calendar,
   MapPin, Eye, HelpCircle,
 } from "lucide-react";
-import { Order, Product } from "../types";
+import { Order, Product, SiteSettings } from "../types";
 import SitePanel from "./admin/SitePanel";
 import ContentManager from "./admin/ContentManager";
 import MediaLibrary from "./admin/MediaLibrary";
 
 interface AdminDashboardProps {
   orders: Order[];
-  onUpdateOrderStatus: (index: number, newStatus: "pending" | "processing" | "shipped") => void;
+  onUpdateOrderStatus: (index: number, newStatus: "pending" | "paid" | "processing" | "shipped") => void;
   onSelectProductInMap: (lat: number, lng: number, zoom: number, name: string) => void;
-  onSeedDemoOrders: () => void;
   onClearOrders: () => void;
   products: Product[];
   onAddProduct: (newProduct: Product) => void;
   onEditProduct: (updatedProduct: Product) => void;
   onDeleteProduct: (id: string) => void;
   constructionMode?: boolean;
-  onToggleConstructionMode?: () => void;
+  onSiteSettingsSaved?: (settings: SiteSettings) => void;
   onNavigateToStore?: () => void;
 }
 
@@ -37,14 +36,13 @@ export default function AdminDashboard({
   orders,
   onUpdateOrderStatus,
   onSelectProductInMap,
-  onSeedDemoOrders,
   onClearOrders,
   products,
   onAddProduct,
   onEditProduct,
   onDeleteProduct,
   constructionMode = false,
-  onToggleConstructionMode = () => {},
+  onSiteSettingsSaved = () => {},
   onNavigateToStore = () => {},
 }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("sitio");
@@ -103,7 +101,7 @@ export default function AdminDashboard({
         {activeTab === "sitio" && (
           <SitePanel
             constructionMode={constructionMode}
-            onToggleConstructionMode={onToggleConstructionMode}
+            onSiteSettingsSaved={onSiteSettingsSaved}
             onNavigateToStore={onNavigateToStore}
           />
         )}
@@ -135,7 +133,6 @@ export default function AdminDashboard({
             orders={orders}
             onUpdateOrderStatus={onUpdateOrderStatus}
             onSelectProductInMap={onSelectProductInMap}
-            onSeedDemoOrders={onSeedDemoOrders}
             onClearOrders={onClearOrders}
             selectedOrder={selectedOrder}
             setSelectedOrder={setSelectedOrder}
@@ -150,12 +147,11 @@ export default function AdminDashboard({
 /* ── Orders Panel ─────────────────────────────────────────── */
 function OrdersPanel({
   orders, onUpdateOrderStatus, onSelectProductInMap,
-  onSeedDemoOrders, onClearOrders, selectedOrder, setSelectedOrder,
+  onClearOrders, selectedOrder, setSelectedOrder,
 }: {
   orders: Order[];
-  onUpdateOrderStatus: (i: number, s: "pending" | "processing" | "shipped") => void;
+  onUpdateOrderStatus: (i: number, s: "pending" | "paid" | "processing" | "shipped") => void;
   onSelectProductInMap: (lat: number, lng: number, zoom: number, name: string) => void;
-  onSeedDemoOrders: () => void;
   onClearOrders: () => void;
   selectedOrder: Order | null;
   setSelectedOrder: (o: Order | null) => void;
@@ -167,7 +163,7 @@ function OrdersPanel({
         {[
           { label: "Total recaudado", value: `COP ${orders.reduce((a, o) => a + o.total, 0).toLocaleString()}`, icon: Activity, color: "text-white" },
           { label: "Órdenes totales", value: String(orders.length), icon: Database, color: "text-white" },
-          { label: "En impresión", value: String(orders.filter((o) => o.status === "processing").length), icon: Truck, color: "text-amber-400" },
+          { label: "Pagados", value: String(orders.filter((o) => o.status === "paid").length), icon: Truck, color: "text-amber-400" },
           { label: "Despachados", value: String(orders.filter((o) => o.status === "shipped").length), icon: Calendar, color: "text-emerald-400" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-[#162231] rounded-2xl border border-white/10 p-5 flex items-center justify-between">
@@ -182,12 +178,6 @@ function OrdersPanel({
 
       {/* Controls */}
       <div className="flex flex-wrap gap-2">
-        <button
-          onClick={onSeedDemoOrders}
-          className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-mono text-[10px] uppercase tracking-widest rounded-xl transition-colors border border-white/10"
-        >
-          + Sembrar Órdenes Demo
-        </button>
         <button
           onClick={onClearOrders}
           className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-mono text-[10px] uppercase tracking-widest rounded-xl transition-colors border border-red-500/20"
@@ -210,7 +200,7 @@ function OrdersPanel({
             <div className="text-center py-16 text-white/30 space-y-3">
               <ShoppingBag className="w-8 h-8 mx-auto" />
               <p className="text-sm">No hay pedidos registrados</p>
-              <p className="text-xs max-w-xs mx-auto">Usa "Sembrar Órdenes Demo" para generar datos de prueba</p>
+              <p className="text-xs max-w-xs mx-auto">Los pedidos apareceran aqui cuando un cliente inicie el pago con Wompi.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -248,12 +238,15 @@ function OrdersPanel({
                           className={`px-2 py-1.5 text-[9px] font-mono tracking-widest font-bold rounded-lg uppercase border focus:outline-none cursor-pointer ${
                             order.status === "pending"
                               ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                               : order.status === "paid"
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                               : order.status === "processing"
                               ? "bg-sky-500/10 text-sky-400 border-sky-500/20"
                               : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                           }`}
                         >
                           <option value="pending">No Pago</option>
+                          <option value="paid">Pagado</option>
                           <option value="processing">En Relieve</option>
                           <option value="shipped">Despachado</option>
                         </select>

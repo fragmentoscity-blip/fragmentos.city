@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.products (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+
 -- Habilitar acceso de lectura público en la tabla products
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Permitir lectura pública de productos" ON public.products
@@ -33,10 +34,16 @@ CREATE TABLE IF NOT EXISTS public.orders (
     "shippingCost" NUMERIC NOT NULL,
     total NUMERIC NOT NULL,
     "paymentMethod" TEXT NOT NULL,
+    "paymentReference" TEXT,
+    "wompiTransactionId" TEXT,
     status TEXT NOT NULL,
     "createdAt" TEXT NOT NULL,
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.orders
+    ADD COLUMN IF NOT EXISTS "paymentReference" TEXT,
+    ADD COLUMN IF NOT EXISTS "wompiTransactionId" TEXT;
 
 -- Habilitar acceso público o autenticado en la tabla orders
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
@@ -51,8 +58,34 @@ CREATE POLICY "Permitir actualización de órdenes para prototipo" ON public.ord
 -- 3. Crear tabla de Credenciales/Perfiles (Autenticación de Coleccionistas y Admins)
 CREATE TABLE IF NOT EXISTS public.users (
     username TEXT PRIMARY KEY,
+    email TEXT,
     password TEXT NOT NULL,
     is_admin BOOLEAN DEFAULT false NOT NULL,
+    full_name TEXT DEFAULT '',
+    phone TEXT DEFAULT '',
+    document_id TEXT DEFAULT '',
+    department TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    address TEXT DEFAULT '',
+    updated_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.users
+    ADD COLUMN IF NOT EXISTS email TEXT,
+    ADD COLUMN IF NOT EXISTS full_name TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS document_id TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS department TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS city TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;
+
+CREATE TABLE IF NOT EXISTS public.registration_codes (
+    email TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    verified BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -65,11 +98,15 @@ CREATE POLICY "Permitir inserción pública de usuarios (registro)" ON public.us
 CREATE POLICY "Permitir actualizaciones a todos los campos en prototipo" ON public.users
     FOR ALL TO public USING (true);
 
+ALTER TABLE public.registration_codes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Permitir flujo publico de codigos de registro" ON public.registration_codes
+    FOR ALL TO public USING (true) WITH CHECK (true);
+
 -- Sembrar credenciales iniciales por defecto si no existen
-INSERT INTO public.users (username, password, is_admin)
+INSERT INTO public.users (username, email, password, is_admin)
 VALUES 
-    ('admin', 'admin123', true),
-    ('daniel', 'daniel123', false)
+    ('admin', 'admin@fragmentos.local', 'admin123', true),
+    ('daniel', 'daniel@fragmentos.local', 'daniel123', false)
 ON CONFLICT (username) DO NOTHING;
 
 

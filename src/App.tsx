@@ -13,12 +13,12 @@ import Cart from "./components/Cart";
 import FavoritesDrawer from "./components/FavoritesDrawer";
 import Checkout from "./components/Checkout";
 import OrderSuccess from "./components/OrderSuccess";
-import PaymentsPlan from "./components/PaymentsPlan";
 import AdminDashboard from "./components/AdminDashboard";
 import LoginModal from "./components/LoginModal";
 import LoginRequiredModal from "./components/LoginRequiredModal";
+import UserProfileModal from "./components/UserProfileModal";
 import Logo from "./components/Logo";
-import { CartItem, Order, Product } from "./types";
+import { CartItem, DEFAULT_SITE_SETTINGS, Order, Product, SiteSettings } from "./types";
 import {
   getProductsFromSupabase,
   saveProductToSupabase,
@@ -27,80 +27,10 @@ import {
   createOrderInSupabase,
   updateOrderStatusInSupabase,
   getSiteSettings,
-  saveSiteSettings,
 } from "./lib/supabaseClient";
+import { WompiCheckoutResult } from "./lib/wompi";
 
 import { Sliders, RefreshCw, Smartphone, Star, Map, ShieldAlert, CheckCircle, Instagram } from "lucide-react";
-
-// Initial simulated history of orders
-const DEMO_ORDERS_INITIAL: Order[] = [
-  {
-    items: [
-      {
-        id: "frag_bog_1818_maderanatural",
-        productId: "frag_bog",
-        name: "Fragmento Bogotá (Cerros Orientales)",
-        size: "18x18",
-        color: "Madera natural",
-        price: 159000,
-        quantity: 1,
-        image: "/src/assets/images/bogota_3d_frame_1781095869593.png",
-      },
-    ],
-    shipping: {
-      fullName: "Camilo Torres",
-      email: "camilo.torres@gmail.com",
-      phone: "3204567890",
-      department: "Bogotá D.C.",
-      city: "Chapinero",
-      address: "Calle 72 # 5 - 12",
-      notes: "Esquina junto al café, edificio de fachas de ladrillo.",
-    },
-    subtotal: 159000,
-    shippingCost: 0,
-    total: 159000,
-    paymentMethod: "wompi",
-    status: "processing",
-    createdAt: "2026-06-08T15:20:00Z",
-  },
-  {
-    items: [
-      {
-        id: "custom_4.6534_-74.0532_1818_Negro",
-        productId: "custom_3d_frame",
-        name: "Cuadro 3D Personalizado: Usaquén",
-        size: "18x18",
-        color: "Negro",
-        price: 159000,
-        quantity: 1,
-        image: "/src/assets/images/bogota_3d_frame_1781095869593.png",
-        isCustom: true,
-        customDetails: {
-          latitude: 4.6973,
-          longitude: -74.0298,
-          zoom: 14,
-          address: "Usaquén, Bogotá, Colombia",
-          style: "dark",
-        },
-      },
-    ],
-    shipping: {
-      fullName: "Isabella Restrepo",
-      email: "isa.restrepo@outlook.com",
-      phone: "3159876543",
-      department: "Bogotá D.C.",
-      city: "Usaquén",
-      address: "Carrera 7d # 120 - 45",
-      notes: "Dejar con vigilante.",
-    },
-    subtotal: 159000,
-    shippingCost: 0,
-    total: 159000,
-    paymentMethod: "epayco",
-    status: "shipped",
-    createdAt: "2026-06-09T09:45:00Z",
-  },
-];
 
 export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
@@ -110,15 +40,16 @@ export default function App() {
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem("fragmentos_orders");
-    return saved ? JSON.parse(saved) : DEMO_ORDERS_INITIAL;
+    return saved ? JSON.parse(saved) : [];
   });
 
-  const [currentView, setCurrentView] = useState<"store" | "checkout" | "success" | "payments_plan" | "admin">("store");
+  const [currentView, setCurrentView] = useState<"store" | "checkout" | "success" | "admin">("store");
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   
   const [likedProducts, setLikedProducts] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem("fragmentos_liked");
@@ -146,27 +77,50 @@ export default function App() {
   const [constructionMode, setConstructionMode] = useState<boolean>(() => {
     return localStorage.getItem("fragmentos_construction_mode") === "true";
   });
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => {
+    const saved = localStorage.getItem("fragmentos_site_settings");
+    if (saved) {
+      try {
+        return { ...DEFAULT_SITE_SETTINGS, ...JSON.parse(saved) };
+      } catch (e) {
+        return DEFAULT_SITE_SETTINGS;
+      }
+    }
+    return DEFAULT_SITE_SETTINGS;
+  });
 
   // Leer modo construcción desde Supabase al cargar (para todos los visitantes)
   useEffect(() => {
     getSiteSettings().then((data) => {
-      if (data && typeof data.construction_mode === "boolean") {
-        setConstructionMode(data.construction_mode);
-        localStorage.setItem("fragmentos_construction_mode", String(data.construction_mode));
+      if (data) {
+        const nextSettings: SiteSettings = {
+          site_active: data.site_active ?? DEFAULT_SITE_SETTINGS.site_active,
+          construction_mode: data.construction_mode ?? DEFAULT_SITE_SETTINGS.construction_mode,
+          construction_title: data.construction_title ?? DEFAULT_SITE_SETTINGS.construction_title,
+          construction_subtitle: data.construction_subtitle ?? DEFAULT_SITE_SETTINGS.construction_subtitle,
+          construction_message: data.construction_message ?? DEFAULT_SITE_SETTINGS.construction_message,
+          construction_open_date: data.construction_open_date ?? DEFAULT_SITE_SETTINGS.construction_open_date,
+          construction_logo: data.construction_logo ?? DEFAULT_SITE_SETTINGS.construction_logo,
+          construction_bg_image: data.construction_bg_image ?? DEFAULT_SITE_SETTINGS.construction_bg_image,
+          construction_email: data.construction_email ?? DEFAULT_SITE_SETTINGS.construction_email,
+          construction_socials: data.construction_socials ?? DEFAULT_SITE_SETTINGS.construction_socials,
+        };
+        setSiteSettings(nextSettings);
+        setConstructionMode(nextSettings.construction_mode);
+        localStorage.setItem("fragmentos_site_settings", JSON.stringify(nextSettings));
+        localStorage.setItem("fragmentos_construction_mode", String(nextSettings.construction_mode));
       }
     });
   }, []);
 
-  const handleToggleConstructionMode = () => {
-    setConstructionMode((prev) => {
-      const newVal = !prev;
-      localStorage.setItem("fragmentos_construction_mode", String(newVal));
-      saveSiteSettings({ construction_mode: newVal });
-      return newVal;
-    });
+  const handleSiteSettingsSaved = (settings: SiteSettings) => {
+    setSiteSettings(settings);
+    setConstructionMode(settings.construction_mode);
+    localStorage.setItem("fragmentos_site_settings", JSON.stringify(settings));
+    localStorage.setItem("fragmentos_construction_mode", String(settings.construction_mode));
   };
 
-  const [currentUser, setCurrentUser] = useState<{ username: string; isAdmin: boolean } | null>(() => {
+  const [currentUser, setCurrentUser] = useState<{ username: string; email: string; isAdmin: boolean } | null>(() => {
     const saved = localStorage.getItem("fragmentos_user");
     return saved ? JSON.parse(saved) : null;
   });
@@ -219,7 +173,7 @@ export default function App() {
 
   // Security check: If a normal user is on an admin view, kick to store
   useEffect(() => {
-    if (!currentUser?.isAdmin && (currentView === "admin" || currentView === "payments_plan")) {
+    if (!currentUser?.isAdmin && currentView === "admin") {
       setCurrentView("store");
     }
   }, [currentUser, currentView]);
@@ -275,20 +229,34 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleSubmitOrder = (order: Order) => {
-    const enrichedOrder = {
+  const handleCreateOrder = (order: Order) => {
+    const enrichedOrder: Order = {
       ...order,
-      id: order.id || "ped_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now()
+      id: order.id || "ped_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now(),
+      paymentReference: order.paymentReference || `FRAG_${Date.now()}`
     };
     setOrders((prev) => [enrichedOrder, ...prev]);
-    setPlacedOrder(enrichedOrder);
-    setCartItems([]); // Clear cart
-    setCurrentView("success");
-    window.scrollTo({ top: 0, behavior: "smooth" });
     createOrderInSupabase(enrichedOrder);
+    return enrichedOrder;
   };
 
-  const handleUpdateOrderStatus = (index: number, newStatus: "pending" | "processing" | "shipped") => {
+  const handlePaymentApproved = (order: Order, result: WompiCheckoutResult) => {
+    const paidOrder: Order = {
+      ...order,
+      status: "paid",
+      wompiTransactionId: result.transaction?.id,
+    };
+    setOrders((prev) => prev.map((existing) => existing.id === paidOrder.id ? paidOrder : existing));
+    if (paidOrder.id) {
+      updateOrderStatusInSupabase(paidOrder.id, "paid");
+    }
+    setPlacedOrder(paidOrder);
+    setCartItems([]);
+    setCurrentView("success");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleUpdateOrderStatus = (index: number, newStatus: "pending" | "paid" | "processing" | "shipped") => {
     setOrders((prev) => {
       const copy = [...prev];
       const targetOrder = copy[index];
@@ -299,16 +267,6 @@ export default function App() {
         }
       }
       return copy;
-    });
-  };
-
-  const handleSeedDemoOrders = () => {
-    setOrders(DEMO_ORDERS_INITIAL);
-    DEMO_ORDERS_INITIAL.forEach(order => {
-      createOrderInSupabase({
-        ...order,
-        id: order.id || "ped_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now()
-      });
     });
   };
 
@@ -342,12 +300,13 @@ export default function App() {
 
   const totalCartCount = cartItems.reduce((acc, it) => acc + it.quantity, 0);
 
-  const handleLogin = (username: string, isAdmin: boolean) => {
-    setCurrentUser({ username, isAdmin });
+  const handleLogin = (username: string, email: string, isAdmin: boolean) => {
+    setCurrentUser({ username, email, isAdmin });
     setLoginOpen(false);
   };
 
   const handleLogout = () => {
+    setProfileOpen(false);
     setCurrentUser(null);
   };
 
@@ -356,10 +315,23 @@ export default function App() {
       
       {/* Construction Mode Fullscreen Blurred Glass Overlay */}
       {constructionMode && !currentUser?.isAdmin && (
-        <div className="fixed inset-0 z-[9999] backdrop-blur-xl bg-white/70 flex flex-col justify-between items-center py-16 px-6 text-center select-none overflow-y-auto">
+        <div
+          className="fixed inset-0 z-[9999] backdrop-blur-xl bg-white/70 flex flex-col justify-between items-center py-16 px-6 text-center select-none overflow-y-auto"
+          style={{
+            backgroundImage: siteSettings.construction_bg_image
+              ? `linear-gradient(rgba(255,255,255,0.78),rgba(255,255,255,0.9)), url(${siteSettings.construction_bg_image})`
+              : undefined,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
           {/* Top branding */}
           <div className="flex flex-col items-center gap-2">
-            <Logo />
+            {siteSettings.construction_logo ? (
+              <img src={siteSettings.construction_logo} alt="Fragmentos" className="h-16 max-w-[220px] object-contain" />
+            ) : (
+              <Logo />
+            )}
             <span className="text-[9px] font-mono tracking-[0.4em] text-brand-gray uppercase font-bold mt-2">
               Edición Relieves de la Sabana
             </span>
@@ -372,16 +344,54 @@ export default function App() {
             </div>
 
             <div className="space-y-4">
-              <h1 className="text-4xl md:text-6xl font-serif text-brand-navy tracking-tight leading-tight">
+              <h1 className="text-[0px] font-serif text-brand-navy tracking-tight leading-tight">
+                <span className="text-4xl md:text-6xl">
+                  {siteSettings.construction_title || DEFAULT_SITE_SETTINGS.construction_title}
+                </span>
                 El relieve de tu historia está por llegar.
               </h1>
-              <p className="text-gray-600 font-sans text-sm md:text-base leading-relaxed max-w-lg mx-auto">
+              <p className="text-[0px] text-gray-600 font-sans leading-relaxed max-w-lg mx-auto">
+                <span className="text-sm md:text-base">
+                  {siteSettings.construction_subtitle || DEFAULT_SITE_SETTINGS.construction_subtitle}
+                </span>
                 Estamos tallando digitalmente las curvas topográficas de cada ciudad. La experiencia completa de personalización 3D estará lista muy pronto.
               </p>
+              {siteSettings.construction_message && (
+                <p className="text-gray-500 font-sans text-xs md:text-sm leading-relaxed max-w-lg mx-auto">
+                  {siteSettings.construction_message}
+                </p>
+              )}
             </div>
 
             {/* Launch Box Display */}
-            <div className="border border-brand-gray/30 bg-white p-8 space-y-3 relative overflow-hidden shadow-sm">
+            {(siteSettings.construction_open_date || siteSettings.construction_email) && (
+              <div className="border border-brand-gray/30 bg-white p-8 space-y-3 relative overflow-hidden shadow-sm">
+                <div className="absolute top-0 left-0 w-full h-[3px] bg-brand-terracotta" />
+                {siteSettings.construction_open_date && (
+                  <>
+                    <span className="text-[10px] font-mono tracking-widest text-brand-gray uppercase font-bold block">
+                      LANZAMIENTO OFICIAL
+                    </span>
+                    <div className="text-3xl md:text-4xl font-serif font-bold text-brand-navy">
+                      {new Date(siteSettings.construction_open_date).toLocaleDateString("es-CO", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </div>
+                  </>
+                )}
+                {siteSettings.construction_email && (
+                  <a
+                    href={`mailto:${siteSettings.construction_email}`}
+                    className="inline-flex text-[10px] font-mono text-brand-terracotta tracking-wider uppercase font-semibold hover:text-brand-navy"
+                  >
+                    {siteSettings.construction_email}
+                  </a>
+                )}
+              </div>
+            )}
+            <div className="hidden border border-brand-gray/30 bg-white p-8 space-y-3 relative overflow-hidden shadow-sm">
               <div className="absolute top-0 left-0 w-full h-[3px] bg-brand-terracotta" />
               <span className="text-[10px] font-mono tracking-widest text-brand-gray uppercase font-bold block">
                 LANZAMIENTO OFICIAL
@@ -430,6 +440,7 @@ export default function App() {
         }}
         currentUser={currentUser}
         onLoginClick={() => setLoginOpen(true)}
+        onOpenProfile={() => setProfileOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -481,7 +492,8 @@ export default function App() {
             setCurrentView("store");
             setCartOpen(true);
           }}
-          onSubmitOrder={handleSubmitOrder}
+          onCreateOrder={handleCreateOrder}
+          onPaymentApproved={handlePaymentApproved}
         />
       )}
 
@@ -494,23 +506,6 @@ export default function App() {
           }}
         />
       )}
-
-      {currentView === "payments_plan" && (
-        <main>
-          <div className="pt-20 bg-neutral-900">
-            <PaymentsPlan />
-          </div>
-          <div className="bg-neutral-950 text-center py-10">
-            <button
-              onClick={() => setCurrentView("store")}
-              className="text-xs font-mono tracking-widest uppercase text-neutral-400 hover:text-white underline"
-            >
-              ← Volver a la Tienda
-            </button>
-          </div>
-        </main>
-      )}
-
       {currentView === "admin" && (
         <main>
           <div className="pt-16">
@@ -518,14 +513,13 @@ export default function App() {
               orders={orders}
               onUpdateOrderStatus={handleUpdateOrderStatus}
               onSelectProductInMap={handleSelectProductInMap}
-              onSeedDemoOrders={handleSeedDemoOrders}
               onClearOrders={handleClearOrders}
               products={products}
               onAddProduct={handleAddProduct}
               onEditProduct={handleEditProduct}
               onDeleteProduct={handleDeleteProduct}
               constructionMode={constructionMode}
-              onToggleConstructionMode={handleToggleConstructionMode}
+              onSiteSettingsSaved={handleSiteSettingsSaved}
               onNavigateToStore={() => setCurrentView("store")}
             />
           </div>
@@ -566,6 +560,14 @@ export default function App() {
         onClose={() => setLoginOpen(false)}
         onLogin={handleLogin}
       />
+
+      {currentUser && (
+        <UserProfileModal
+          isOpen={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          username={currentUser.username}
+        />
+      )}
 
       <LoginRequiredModal
         isOpen={loginRequiredOpen}

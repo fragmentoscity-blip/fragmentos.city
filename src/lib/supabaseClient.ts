@@ -4,11 +4,22 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { UserProfile } from "../types";
 
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || "";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+const registrationCodeEndpoint = (import.meta as any).env.VITE_REGISTRATION_CODE_ENDPOINT || "";
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function createSixDigitCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 /**
  * Uploads a file (image/video) to Supabase Storage.
@@ -147,19 +158,35 @@ export async function getOrdersFromSupabase() {
 
 export async function createOrderInSupabase(order: any) {
   try {
+    const orderPayload = {
+      id: order.id,
+      items: order.items,
+      shipping: order.shipping,
+      subtotal: order.subtotal,
+      shippingCost: order.shippingCost,
+      total: order.total,
+      paymentMethod: order.paymentMethod,
+      status: order.status,
+      createdAt: order.createdAt,
+      paymentReference: order.paymentReference,
+      wompiTransactionId: order.wompiTransactionId,
+    };
+
     const { error } = await supabase
       .from("orders")
-      .insert({
-        id: order.id,
-        items: order.items,
-        shipping: order.shipping,
-        subtotal: order.subtotal,
-        shippingCost: order.shippingCost,
-        total: order.total,
-        paymentMethod: order.paymentMethod,
-        status: order.status,
-        createdAt: order.createdAt,
-      });
+      .insert(orderPayload);
+
+    if (error && (error.message.includes("paymentReference") || error.message.includes("wompiTransactionId"))) {
+      const { paymentReference, wompiTransactionId, ...compatiblePayload } = orderPayload;
+      const { error: retryError } = await supabase
+        .from("orders")
+        .insert(compatiblePayload);
+      if (retryError) {
+        console.warn("Could not sync new order to Supabase", retryError.message);
+      }
+      return;
+    }
+
     if (error) {
       console.warn("Could not sync new order to Supabase", error.message);
     }
@@ -186,12 +213,13 @@ export async function updateOrderStatusInSupabase(orderId: string, status: strin
  * Checks if a user is valid and matches the given password in Supabase.
  * Includes graceful local fallback in case Supabase credentials table isn't set up yet.
  */
-export async function authenticateUserWithSupabase(username: string, password: string): Promise<{ username: string; isAdmin: boolean } | null> {
+export async function authenticateUserWithSupabase(username: string, password: string): Promise<{ username: string; email: string; isAdmin: boolean } | null> {
   try {
+    const cleanUsername = normalizeEmail(username);
     const { data, error } = await supabase
       .from("users")
       .select("*")
-      .eq("username", username.trim().toLowerCase())
+      .eq("username", cleanUsername)
       .single();
 
     if (error) {
@@ -202,6 +230,7 @@ export async function authenticateUserWithSupabase(username: string, password: s
     if (data && data.password === password.trim()) {
       return {
         username: data.username,
+        email: data.email || data.username,
         isAdmin: !!data.is_admin,
       };
     }
@@ -210,6 +239,175 @@ export async function authenticateUserWithSupabase(username: string, password: s
   } catch (err) {
     console.error("Supabase user query failed:", err);
     return null;
+  }
+}
+
+export async function requestRegistrationCode(email: string): Promise<{ success: boolean; message: string; devCode?: string }> {
+  try {
+    const cleanEmail = normalizeEmail(email);
+    if (!/\S+@\S+\.\S+/.test(cleanEmail)) {
+      return { success: false, message: "Ingresa un correo válido." };
+    }
+
+    const { data: existingUser } = await supabase
+      .from("users")
+      .select("username")
+      .eq("username", cleanEmail)
+      .maybeSingle();
+
+    if (existingUser) {
+      return { success: false, message: "Este correo ya tiene una cuenta registrada." };
+    }
+
+    const code = createSixDigitCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const { error } = await supabase
+      .from("registration_codes")
+      .upsert({
+        email: cleanEmail,
+        code,
+        expires_at: expiresAt,
+        verified: false,
+        created_at: new Date().toISOString(),
+      });
+
+    if (error) {
+      return { success: false, message: `No se pudo crear el código: ${error.message}` };
+    }
+
+    if (registrationCodeEndpoint) {
+      const response = await fetch(registrationCodeEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail, code }),
+      });
+      if (!response.ok) {
+        return { success: false, message: "El código se generó, pero no se pudo enviar el correo." };
+      }
+      return { success: true, message: "Te enviamos un código de 6 dígitos a tu correo." };
+    }
+
+    return {
+      success: true,
+      message: "Código creado en Supabase. Configura VITE_REGISTRATION_CODE_ENDPOINT para enviarlo por correo.",
+      devCode: code,
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message || "No se pudo solicitar el código." };
+  }
+}
+
+export async function verifyRegistrationCode(email: string, code: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const cleanEmail = normalizeEmail(email);
+    const cleanCode = code.replace(/\D/g, "");
+
+    const { data, error } = await supabase
+      .from("registration_codes")
+      .select("*")
+      .eq("email", cleanEmail)
+      .eq("code", cleanCode)
+      .maybeSingle();
+
+    if (error || !data) {
+      return { success: false, message: "Código incorrecto." };
+    }
+
+    if (new Date(data.expires_at).getTime() < Date.now()) {
+      return { success: false, message: "El código venció. Solicita uno nuevo." };
+    }
+
+    const { error: updateError } = await supabase
+      .from("registration_codes")
+      .update({ verified: true })
+      .eq("email", cleanEmail);
+
+    if (updateError) {
+      return { success: false, message: `No se pudo confirmar el correo: ${updateError.message}` };
+    }
+
+    return { success: true, message: "Correo confirmado. Crea tu contraseña." };
+  } catch (err: any) {
+    return { success: false, message: err.message || "No se pudo verificar el código." };
+  }
+}
+
+export async function completeRegistrationWithPassword(email: string, password: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const cleanEmail = normalizeEmail(email);
+    const cleanPassword = password.trim();
+
+    if (cleanPassword.length < 8) {
+      return { success: false, message: "La contraseña debe tener mínimo 8 caracteres." };
+    }
+
+    const { data: codeData } = await supabase
+      .from("registration_codes")
+      .select("*")
+      .eq("email", cleanEmail)
+      .eq("verified", true)
+      .maybeSingle();
+
+    if (!codeData) {
+      return { success: false, message: "Primero confirma el correo con el código enviado." };
+    }
+
+    return registerUserInSupabase(cleanEmail, cleanPassword, false);
+  } catch (err: any) {
+    return { success: false, message: err.message || "No se pudo completar el registro." };
+  }
+}
+
+export async function getUserProfile(username: string): Promise<UserProfile | null> {
+  try {
+    const cleanUsername = normalizeEmail(username);
+    const { data, error } = await supabase
+      .from("users")
+      .select("username,email,full_name,phone,document_id,department,city,address,updated_at")
+      .eq("username", cleanUsername)
+      .maybeSingle();
+
+    if (error || !data) {
+      if (error) console.warn("Could not retrieve user profile", error.message);
+      return null;
+    }
+
+    return {
+      username: data.username,
+      email: data.email || data.username,
+      full_name: data.full_name || "",
+      phone: data.phone || "",
+      document_id: data.document_id || "",
+      department: data.department || "",
+      city: data.city || "",
+      address: data.address || "",
+      updated_at: data.updated_at,
+    };
+  } catch (err) {
+    console.error("getUserProfile failed", err);
+    return null;
+  }
+}
+
+export async function updateUserProfileField(
+  username: string,
+  field: keyof Pick<UserProfile, "full_name" | "phone" | "document_id" | "department" | "city" | "address">,
+  value: string
+) {
+  try {
+    const { error } = await supabase
+      .from("users")
+      .update({ [field]: value.trim(), updated_at: new Date().toISOString() })
+      .eq("username", normalizeEmail(username));
+
+    if (error) {
+      return { success: false, message: error.message };
+    }
+
+    return { success: true, message: "Dato guardado." };
+  } catch (err: any) {
+    return { success: false, message: err.message || "No se pudo guardar el dato." };
   }
 }
 
@@ -318,6 +516,7 @@ export async function registerUserInSupabase(username: string, password: string,
       .from("users")
       .insert({
         username: cleanUsername,
+        email: cleanUsername,
         password: cleanPassword,
         is_admin: isAdmin,
       });

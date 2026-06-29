@@ -7,11 +7,11 @@ import ConstructionSettings from "./ConstructionSettings";
 
 interface SitePanelProps {
   constructionMode: boolean;
-  onToggleConstructionMode: () => void;
+  onSiteSettingsSaved: (settings: SiteSettings) => void;
   onNavigateToStore: () => void;
 }
 
-export default function SitePanel({ constructionMode, onToggleConstructionMode, onNavigateToStore }: SitePanelProps) {
+export default function SitePanel({ constructionMode, onSiteSettingsSaved, onNavigateToStore }: SitePanelProps) {
   const [settings, setSettings] = useState<SiteSettings>({
     ...DEFAULT_SITE_SETTINGS,
     construction_mode: constructionMode,
@@ -43,9 +43,9 @@ export default function SitePanel({ constructionMode, onToggleConstructionMode, 
 
   const handleSave = async () => {
     setSaving(true);
-    await saveSiteSettings(settings);
-    if (settings.construction_mode !== constructionMode) {
-      onToggleConstructionMode();
+    const savedToDatabase = await saveSiteSettings(settings);
+    if (savedToDatabase) {
+      onSiteSettingsSaved(settings);
     }
     setSaving(false);
     setSaved(true);

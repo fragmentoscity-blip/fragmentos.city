@@ -4,8 +4,9 @@
  */
 
 import React, { useState } from "react";
-import { ArrowLeft, CheckCircle, ShieldCheck, Mail, Phone, Truck, CreditCard, Sparkles, Check } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Mail, Phone, Truck, CreditCard, Loader2, AlertCircle } from "lucide-react";
 import { CartItem, ShippingInfo, Order } from "../types";
+import { openWompiCheckout, WompiCheckoutResult } from "../lib/wompi";
 
 // Departments & Cities options for simple, fast, direct Colombian checkout
 const COLOMBIAN_REGIONS = [
@@ -19,10 +20,11 @@ const COLOMBIAN_REGIONS = [
 interface CheckoutProps {
   cartItems: CartItem[];
   onBackToCart: () => void;
-  onSubmitOrder: (order: Order) => void;
+  onCreateOrder: (order: Order) => Order | Promise<Order>;
+  onPaymentApproved: (order: Order, result: WompiCheckoutResult) => void;
 }
 
-export default function Checkout({ cartItems, onBackToCart, onSubmitOrder }: CheckoutProps) {
+export default function Checkout({ cartItems, onBackToCart, onCreateOrder, onPaymentApproved }: CheckoutProps) {
   const [shipping, setShipping] = useState<ShippingInfo>({
     fullName: "",
     email: "",
@@ -33,8 +35,9 @@ export default function Checkout({ cartItems, onBackToCart, onSubmitOrder }: Che
     notes: "",
   });
 
-  const [paymentMethod, setPaymentMethod] = useState<"wompi" | "epayco" | "contraentrega">("wompi");
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [paymentError, setPaymentError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const shippingCost = 0; // Free shipping across Colombia
@@ -76,26 +79,48 @@ export default function Checkout({ cartItems, onBackToCart, onSubmitOrder }: Che
     setShipping((prev) => ({ ...prev, department: dept, city: initialCity }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPaymentError("");
+
+    if (cartItems.length === 0) {
+      setPaymentError("Tu carrito está vacío.");
+      return;
+    }
+
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
-    const newOrder: Order = {
-      items: cartItems,
-      shipping,
-      subtotal,
-      shippingCost,
-      total,
-      paymentMethod,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
+    setIsSubmitting(true);
 
-    onSubmitOrder(newOrder);
+    try {
+      const pendingOrder = await onCreateOrder({
+        items: cartItems,
+        shipping,
+        subtotal,
+        shippingCost,
+        total,
+        paymentMethod: "wompi",
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      });
+
+      await openWompiCheckout(pendingOrder, (result) => {
+        if (result.transaction?.status === "APPROVED") {
+          onPaymentApproved(pendingOrder, result);
+          return;
+        }
+
+        setPaymentError("El pago no fue aprobado por Wompi. Puedes intentarlo nuevamente.");
+        setIsSubmitting(false);
+      });
+    } catch (error: any) {
+      setPaymentError(error.message || "No fue posible iniciar el pago con Wompi.");
+      setIsSubmitting(false);
+    }
   };
 
   const activeRegion = COLOMBIAN_REGIONS.find((r) => r.dept === shipping.department);
@@ -241,78 +266,42 @@ export default function Checkout({ cartItems, onBackToCart, onSubmitOrder }: Che
 
             </div>
 
-            {/* Payment Method Selector */}
+            {/* Payment Method */}
             <div className="border-t border-gray-100 pt-8 space-y-4">
               <label className="block text-[10px] uppercase tracking-[0.2em] font-bold text-black mb-4 flex items-center gap-1.5">
                 <CreditCard className="w-4 h-4 text-black" /> Método de Pago
               </label>
 
               <div className="space-y-3">
-                {/* Wompi Option */}
-                <div
-                  onClick={() => setPaymentMethod("wompi")}
-                  className={`border p-5 rounded-none cursor-pointer transition-all ${
-                    paymentMethod === "wompi" ? "border-black bg-white" : "border-gray-200 hover:border-black bg-[#FAFAFA]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
+                <div className="border border-black bg-white p-5 rounded-none">
+                  <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full border border-gray-350 flex items-center justify-center p-0.5">
-                        {paymentMethod === "wompi" && <span className="w-full h-full rounded-full bg-black" />}
-                      </div>
+                      <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
                       <div>
                         <span className="text-sm font-bold text-black block">Wompi (Grupo Bancolombia)</span>
-                        <span className="text-xs text-gray-500 mt-0.5 block">Paga con PSE, Tarjeta de Crédito, Nequi o Botón Bancolombia.</span>
+                        <span className="text-xs text-gray-500 mt-0.5 block">Paga con PSE, tarjeta, Nequi o Boton Bancolombia.</span>
                       </div>
                     </div>
-                    <span className="text-[9px] font-mono tracking-widest bg-black text-white px-2.5 py-1 uppercase font-bold">Recomendado</span>
+                    <span className="text-[9px] font-mono tracking-widest bg-black text-white px-2.5 py-1 uppercase font-bold">Activo</span>
                   </div>
                 </div>
+              </div>            </div>
 
-                {/* ePayco Option */}
-                <div
-                  onClick={() => setPaymentMethod("epayco")}
-                  className={`border p-5 rounded-none cursor-pointer transition-all ${
-                    paymentMethod === "epayco" ? "border-black bg-white" : "border-gray-200 hover:border-black bg-[#FAFAFA]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full border border-gray-350 flex items-center justify-center p-0.5">
-                      {paymentMethod === "epayco" && <span className="w-full h-full rounded-full bg-black" />}
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-black block">ePayco Davivienda</span>
-                      <span className="text-xs text-gray-500 mt-0.5 block">Billeteras Daviplata, Efecty, Gana y tarjetas de crédito locales.</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contraentrega */}
-                <div
-                  onClick={() => setPaymentMethod("contraentrega")}
-                  className={`border p-5 rounded-none cursor-pointer transition-all ${
-                    paymentMethod === "contraentrega" ? "border-black bg-white" : "border-gray-200 hover:border-black bg-[#FAFAFA]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full border border-gray-350 flex items-center justify-center p-0.5">
-                      {paymentMethod === "contraentrega" && <span className="w-full h-full rounded-full bg-black" />}
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-black block">Pago Contra Entrega</span>
-                      <span className="text-xs text-gray-500 mt-0.5 block">Cancela en efectivo al recibir el cuadro de manos de la transportadora.</span>
-                    </div>
-                  </div>
-                </div>
+            {paymentError && (
+              <div className="border border-red-200 bg-red-50 text-red-700 p-4 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{paymentError}</span>
               </div>
-            </div>
+            )}
 
             {/* Submit checkout buttons */}
             <button
               type="submit"
-              className="w-full bg-black hover:bg-neutral-900 text-white font-bold py-5 text-xs tracking-[0.2em] uppercase transition-colors flex items-center justify-center gap-2"
+              disabled={isSubmitting}
+              className="w-full bg-black hover:bg-neutral-900 disabled:bg-neutral-400 disabled:cursor-not-allowed text-white font-bold py-5 text-xs tracking-[0.2em] uppercase transition-colors flex items-center justify-center gap-2"
             >
-              <ShieldCheck className="w-4.5 h-4.5" /> Procesar Orden Registrada
+              {isSubmitting ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <ShieldCheck className="w-4.5 h-4.5" />}
+              {isSubmitting ? "Abriendo Wompi" : "Pagar con Wompi"}
             </button>
 
           </form>

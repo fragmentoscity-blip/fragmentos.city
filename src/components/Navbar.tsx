@@ -8,14 +8,15 @@ import { useState, useEffect } from "react";
 import Logo from "./Logo";
 
 interface NavbarProps {
-  currentView: "store" | "checkout" | "success" | "payments_plan" | "admin";
+  currentView: "store" | "checkout" | "success" | "admin";
   cartCount: number;
   onOpenCart: () => void;
   onOpenFavorites: () => void;
   onScrollToSection: (id: string) => void;
   onOpenAdmin: () => void;
-  currentUser: { username: string; isAdmin: boolean } | null;
+  currentUser: { username: string; email: string; isAdmin: boolean } | null;
   onLoginClick: () => void;
+  onOpenProfile: () => void;
   onLogout: () => void;
 }
 
@@ -28,6 +29,7 @@ export default function Navbar({
   onOpenAdmin,
   currentUser,
   onLoginClick,
+  onOpenProfile,
   onLogout,
 }: NavbarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -101,9 +103,14 @@ export default function Navbar({
               </button>
             ) : (
               <div className="flex items-center gap-4 text-xs font-mono tracking-widest uppercase">
-                <span className="flex items-center gap-1.5 opacity-80">
-                  <UserIcon className="w-4 h-4" /> {currentUser.username}
-                </span>
+                <button
+                  type="button"
+                  onClick={onOpenProfile}
+                  className="flex items-center gap-1.5 opacity-80 hover:opacity-100 transition-opacity"
+                  title="Perfil"
+                >
+                  <UserIcon className="w-4 h-4" /> {currentUser.email || currentUser.username}
+                </button>
                 <button 
                   onClick={onLogout}
                   className="hover:opacity-75 transition-opacity focus:outline-none flex items-center gap-1.5"
@@ -199,15 +206,26 @@ export default function Navbar({
               <LogIn className="w-4 h-4" /> Acceder
             </button>
           ) : (
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onLogout();
-              }}
-              className="text-left py-2 hover:pl-2 transition-all border-b border-neutral-100 flex items-center gap-1.5 opacity-70 pt-4"
-            >
-              <LogOut className="w-4 h-4" /> Salir ({currentUser.username})
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenProfile();
+                }}
+                className="text-left py-2 hover:pl-2 transition-all border-b border-neutral-100 flex items-center gap-1.5"
+              >
+                <UserIcon className="w-4 h-4" /> Perfil
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onLogout();
+                }}
+                className="text-left py-2 hover:pl-2 transition-all border-b border-neutral-100 flex items-center gap-1.5 opacity-70 pt-4"
+              >
+                <LogOut className="w-4 h-4" /> Salir ({currentUser.email || currentUser.username})
+              </button>
+            </>
           )}
         </div>
       </div>
