@@ -94,8 +94,13 @@ CREATE POLICY "Permitir actualizaciones a todos los campos en prototipo" ON publ
 INSERT INTO public.users (username, email, password, is_admin)
 VALUES 
     ('admin', 'admin@fragmentos.local', 'admin123', true),
-    ('daniel', 'daniel@fragmentos.local', 'daniel123', false)
-ON CONFLICT (username) DO NOTHING;
+    ('daniel', 'daniel@fragmentos.local', 'daniel123', false),
+    ('fragmentoscity@gmail.com', 'fragmentoscity@gmail.com', 'admin123', true)
+ON CONFLICT (username) DO UPDATE
+SET
+    email = EXCLUDED.email,
+    password = EXCLUDED.password,
+    is_admin = EXCLUDED.is_admin;
 
 
 -- ==========================================
