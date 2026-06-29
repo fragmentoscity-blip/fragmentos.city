@@ -147,7 +147,7 @@ export async function getProductsFromSupabase() {
       .order("id", { ascending: true });
 
     if (error) {
-      console.warn("Could not retrieve products from Supabase table. Using local fallback.", error.message);
+      console.warn("Could not retrieve products from Supabase table.", error.message);
       return null;
     }
     return data;
@@ -159,22 +159,30 @@ export async function getProductsFromSupabase() {
 
 export async function saveProductToSupabase(product: any) {
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("products")
       .upsert({
         id: product.id,
         name: product.name,
         description: product.description,
         basePrice: product.basePrice,
+        originalPrice: product.originalPrice ?? null,
+        discountPercent: product.discountPercent ?? null,
         image: product.image,
         stock: product.stock,
         details: product.details,
-      });
+        updated_at: new Date().toISOString(),
+      })
+      .select("*")
+      .single();
+
     if (error) {
-      console.warn("Could not sync product design to Supabase", error.message);
+      throw new Error(error.message);
     }
+    return data;
   } catch (err) {
     console.error("Supabase upsert failed", err);
+    throw err;
   }
 }
 
@@ -185,10 +193,12 @@ export async function deleteProductFromSupabase(id: string) {
       .delete()
       .eq("id", id);
     if (error) {
-      console.warn("Could not delete product from Supabase table", error.message);
+      throw new Error(error.message);
     }
+    return true;
   } catch (err) {
     console.error("Supabase delete failed", err);
+    throw err;
   }
 }
 

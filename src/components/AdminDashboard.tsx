@@ -15,9 +15,9 @@ interface AdminDashboardProps {
   onSelectProductInMap: (lat: number, lng: number, zoom: number, name: string) => void;
   onClearOrders: () => void;
   products: Product[];
-  onAddProduct: (newProduct: Product) => void;
-  onEditProduct: (updatedProduct: Product) => void;
-  onDeleteProduct: (id: string) => void;
+  onAddProduct: (newProduct: Product) => Promise<void>;
+  onEditProduct: (updatedProduct: Product) => Promise<void>;
+  onDeleteProduct: (id: string) => Promise<void>;
   constructionMode?: boolean;
   onSiteSettingsSaved?: (settings: SiteSettings) => void;
   onNavigateToStore?: () => void;

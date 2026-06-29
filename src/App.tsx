@@ -51,23 +51,7 @@ export default function App() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
 
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem("fragmentos_products");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Ensure Fragmento Medellín is injected if not already present
-        if (!parsed.some((p: any) => p.id === "frag_med")) {
-          const med = INITIAL_PRODUCTS.find((p) => p.id === "frag_med");
-          if (med) parsed.push(med);
-        }
-        return parsed;
-      } catch (e) {
-        return INITIAL_PRODUCTS;
-      }
-    }
-    return INITIAL_PRODUCTS;
-  });
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
 
   const [constructionMode, setConstructionMode] = useState<boolean>(() => {
     return localStorage.getItem("fragmentos_construction_mode") === "true";
@@ -129,10 +113,6 @@ export default function App() {
     localStorage.setItem("fragmentos_cart", JSON.stringify(cartItems));
   }, [cartItems]);
 
-  useEffect(() => {
-    localStorage.setItem("fragmentos_products", JSON.stringify(products));
-  }, [products]);
-
   // Save orders to localstorage
   useEffect(() => {
     localStorage.setItem("fragmentos_orders", JSON.stringify(orders));
@@ -161,7 +141,7 @@ export default function App() {
   useEffect(() => {
     async function loadSupabaseData() {
       const dbProducts = await getProductsFromSupabase();
-      if (dbProducts && dbProducts.length > 0) {
+      if (dbProducts) {
         setProducts(dbProducts);
       }
       const dbOrders = await getOrdersFromSupabase();
@@ -276,19 +256,19 @@ export default function App() {
     setOrders([]);
   };
 
-  const handleAddProduct = (newProduct: Product) => {
-    setProducts((prev) => [...prev, newProduct]);
-    saveProductToSupabase(newProduct);
+  const handleAddProduct = async (newProduct: Product) => {
+    const savedProduct = await saveProductToSupabase(newProduct);
+    setProducts((prev) => [...prev.filter((p) => p.id !== savedProduct.id), savedProduct]);
   };
 
-  const handleEditProduct = (updatedProduct: Product) => {
-    setProducts((prev) => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-    saveProductToSupabase(updatedProduct);
+  const handleEditProduct = async (updatedProduct: Product) => {
+    const savedProduct = await saveProductToSupabase(updatedProduct);
+    setProducts((prev) => prev.map(p => p.id === savedProduct.id ? savedProduct : p));
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
+    await deleteProductFromSupabase(id);
     setProducts((prev) => prev.filter((p) => p.id !== id));
-    deleteProductFromSupabase(id);
   };
 
   const totalCartCount = cartItems.reduce((acc, it) => acc + it.quantity, 0);

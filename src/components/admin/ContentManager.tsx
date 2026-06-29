@@ -7,9 +7,9 @@ import ContentEditor from "./ContentEditor";
 
 interface ContentManagerProps {
   products: Product[];
-  onAddProduct: (p: Product) => void;
-  onEditProduct: (p: Product) => void;
-  onDeleteProduct: (id: string) => void;
+  onAddProduct: (p: Product) => Promise<void>;
+  onEditProduct: (p: Product) => Promise<void>;
+  onDeleteProduct: (id: string) => Promise<void>;
 }
 
 type FilterStatus = "all" | "published" | "hidden";
@@ -22,6 +22,7 @@ export default function ContentManager({
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [editingProduct, setEditingProduct] = useState<Product | null | "new">(null);
+  const [actionError, setActionError] = useState("");
 
   const filtered = useMemo<Product[]>(() => {
     let list: Product[] = [...products];
@@ -44,25 +45,53 @@ export default function ContentManager({
     return list;
   }, [products, search, filterStatus, sortBy]);
 
-  const handleSave = (product: Product) => {
+  const handleSave = async (product: Product) => {
+    setActionError("");
     const exists = products.find((p) => p.id === product.id);
-    if (exists) onEditProduct(product);
-    else onAddProduct(product);
+    if (exists) await onEditProduct(product);
+    else await onAddProduct(product);
     setEditingProduct(null);
   };
 
-  const handleDuplicate = (product: Product) => {
+  const handleDuplicate = async (product: Product) => {
+    setActionError("");
     const copy: Product = {
       ...product,
       id: product.id + "_copy_" + Date.now(),
       name: product.name + " (copia)",
       stock: 0,
     };
-    onAddProduct(copy);
+    try {
+      await onAddProduct(copy);
+    } catch (error: any) {
+      setActionError(error?.message || "No se pudo duplicar el contenido en Supabase.");
+    }
   };
 
-  const handlePublish = (product: Product) => onEditProduct({ ...product, stock: Math.max(product.stock, 1) });
-  const handleHide   = (product: Product) => onEditProduct({ ...product, stock: 0 });
+  const handlePublish = async (product: Product) => {
+    setActionError("");
+    try {
+      await onEditProduct({ ...product, stock: Math.max(product.stock, 1) });
+    } catch (error: any) {
+      setActionError(error?.message || "No se pudo publicar el contenido en Supabase.");
+    }
+  };
+  const handleHide = async (product: Product) => {
+    setActionError("");
+    try {
+      await onEditProduct({ ...product, stock: 0 });
+    } catch (error: any) {
+      setActionError(error?.message || "No se pudo ocultar el contenido en Supabase.");
+    }
+  };
+  const handleDelete = async (id: string) => {
+    setActionError("");
+    try {
+      await onDeleteProduct(id);
+    } catch (error: any) {
+      setActionError(error?.message || "No se pudo eliminar el contenido en Supabase.");
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -115,6 +144,12 @@ export default function ContentManager({
         </div>
       </div>
 
+      {actionError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+          {actionError}
+        </div>
+      )}
+
       {/* Stats bar */}
       <div className="flex gap-4 text-xs font-mono text-white/40">
         <span>{filtered.length} de {products.length} ítems</span>
@@ -143,7 +178,7 @@ export default function ContentManager({
                 onDuplicate={handleDuplicate}
                 onPublish={handlePublish}
                 onHide={handleHide}
-                onDelete={onDeleteProduct}
+                onDelete={handleDelete}
               />
             </Fragment>
           ))}

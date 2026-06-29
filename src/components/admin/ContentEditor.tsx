@@ -7,7 +7,7 @@ import MediaLibrary from "./MediaLibrary";
 
 interface ContentEditorProps {
   product: Product | null;
-  onSave: (product: Product) => void;
+  onSave: (product: Product) => Promise<void>;
   onClose: () => void;
 }
 
@@ -40,6 +40,7 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
   const isNew = !product?.id;
   const [activeTab, setActiveTab] = useState<Tab>("general");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -93,6 +94,7 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
   const handleSave = async () => {
     if (!name.trim()) { setActiveTab("general"); return; }
     setSaving(true);
+    setSaveError("");
     const saved: Product = {
       id: product?.id || ("frag_" + name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "_")),
       name,
@@ -104,9 +106,13 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
       stock,
       details: { lat: Number(lat), lng: Number(lng), zoom: Number(zoom) },
     };
-    await new Promise((r) => setTimeout(r, 300));
-    onSave(saved);
-    setSaving(false);
+    try {
+      await onSave(saved);
+    } catch (error: any) {
+      setSaveError(error?.message || "No se pudo guardar en Supabase.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -144,6 +150,12 @@ export default function ContentEditor({ product, onSave, onClose }: ContentEdito
 
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto p-5">
+          {saveError && (
+            <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+              {saveError}
+            </div>
+          )}
+
           {/* Info General */}
           {activeTab === "general" && (
             <div className="space-y-4">
